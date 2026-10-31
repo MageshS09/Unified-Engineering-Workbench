@@ -2,13 +2,16 @@
 // Usage: workbench_cli [results_dir]   (default: results/ next to the executable's parent)
 #include <windows.h>
 
+#include <chrono>
 #include <filesystem>
 #include <iostream>
 
 #include "backprop.h"
 #include "batch.h"
+#include "csv_nodes.h"
 #include "fea_study.h"
 #include "fileio.h"
+#include "stl_parser.h"
 #include "svg_plot.h"
 #include "sysinfo.h"
 
@@ -73,6 +76,38 @@ void writeBackpropResults(const fs::path& out) {
                   << std::endl;
 }
 
+// Wall-clock time of one parse call (input text is already in memory, so no file I/O is timed).
+template <typename Fn>
+double timeParse(Fn&& parse) {
+    const auto t0 = std::chrono::steady_clock::now();
+    parse();
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+}
+
+void benchmarkLine(std::string& csv, const char* name, size_t bytes, size_t items, double seconds) {
+    char line[200];
+    std::snprintf(line, sizeof line, "%s,%.1f,%zu,%.3f,%.0f\n", name, bytes / 1048576.0, items, seconds, items / seconds);
+    csv += line;
+    std::cout << "  " << name << ": " << bytes / 1048576.0 << " MB, " << items << " items, " << seconds << " s" << std::endl;
+}
+
+void writeGeometryResults(const fs::path& out, const fs::path& dataDir) {
+    // Sample data for the Geometry view: a formula-generated, clearly labelled SYNTHETIC grid.
+    wb::writeFileAtomic((dataDir / "synthetic_temperature.csv").string(), wb::syntheticGridCsv(11, 11, 11));
+    std::cout << "Geometry: wrote data/synthetic_temperature.csv (SYNTHETIC, 1331 nodes)" << std::endl;
+
+    std::string csv = "case,size_MB,items,parse_s,items_per_s\n";
+    const std::string stl = wb::syntheticStlText(200000);
+    benchmarkLine(csv, "STL 200k triangles", stl.size(), 200000, timeParse([&] { wb::parseAsciiStl(stl); }));
+    for (int nz : {100, 300}) {
+        const std::string text = wb::syntheticGridCsv(100, 100, nz);
+        const size_t nodes = 10000u * nz;
+        benchmarkLine(csv, nz == 100 ? "CSV 1M nodes" : "CSV 3M nodes", text.size(), nodes,
+                      timeParse([&] { wb::parseNodeCsv(text); }));
+    }
+    wb::writeFileAtomic((out / "parse_benchmark.csv").string(), csv);
+}
+
 void writePerfResults(const fs::path& out) {
     const wb::PerfReport rep = wb::runBenchmark(wb::PerfConfig{});
     wb::writeFileAtomic((out / "perf.csv").string(), wb::perfCsv(rep));
@@ -94,6 +129,7 @@ int main(int argc, char** argv) {
         writeFeaResults(out);
         writeBackpropResults(out);
         writePerfResults(out);
+        writeGeometryResults(out, out.parent_path() / "data");
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "workbench_cli failed: " << e.what() << "\n";

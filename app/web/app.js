@@ -170,6 +170,119 @@ $('fea-export-sol').onclick = () => {
   download(`fea_N${n}.csv`, fea.result.csv[`N${n}`]);
 };
 
+// ---------- Geometry: STL mesh and CSV point cloud ----------
+const MAX_FILE_BYTES = 200 * 1024 * 1024;
+const geo = { stl: null, csv: null };
+const DEFAULT_CAMERA = { eye: { x: 1.25, y: 1.25, z: 1.25 }, center: { x: 0, y: 0, z: 0 }, up: { x: 0, y: 0, z: 1 } };
+
+function sceneLayout(title) {
+  const axis = (t) => ({ title: t, autorange: true });
+  return {
+    title, margin: { t: 40, l: 0, r: 0, b: 0 },
+    scene: { aspectmode: 'data', camera: DEFAULT_CAMERA, xaxis: axis('x (m)'), yaxis: axis('y (m)'), zaxis: axis('z (m)') },
+  };
+}
+
+// Reset camera and axis ranges so the whole model is visible.
+function fitToView(div) {
+  Plotly.relayout(div, {
+    'scene.camera': DEFAULT_CAMERA, 'scene.xaxis.autorange': true, 'scene.yaxis.autorange': true, 'scene.zaxis.autorange': true,
+  });
+}
+
+function showGeoMessage(id, text, isError) {
+  $(id).textContent = text;
+  $(id).className = 'msg' + (isError ? ' err' : '');
+}
+
+function statsTable(rows) {
+  return rows.map(([k, v]) => `<tr><th style="text-align:left">${k}</th><td>${v}</td></tr>`).join('');
+}
+
+const fmt3 = (a) => a.map((v) => Number(v).toPrecision(5)).join(', ');
+
+// Sends a file (or asks for a bundled sample) to the C++ parser; returns the parsed JSON.
+async function loadGeometry(kind, file) {
+  showGeoMessage(`${kind}-msg`, '');
+  if (file && file.size > MAX_FILE_BYTES) {
+    throw new Error(`The file is ${(file.size / 1048576).toFixed(1)} MB, above the 200 MB limit. Split or decimate the data and load a smaller file.`);
+  }
+  status.set(`Parsing ${file ? file.name : 'sample'} in the C++ backend...`, 'busy');
+  const url = file ? `/api/geometry/${kind}` : `/api/geometry/sample/${kind}`;
+  const opts = file ? { method: 'POST', body: file, headers: { 'Content-Type': 'application/octet-stream', 'X-Filename': encodeURIComponent(file.name) } } : undefined;
+  const r = await api(url, opts);
+  status.set('Backend ready', 'ok');
+  return r;
+}
+
+function renderStl(r) {
+  geo.stl = r;
+  const traces = [{ type: 'mesh3d', x: r.x, y: r.y, z: r.z, i: r.i, j: r.j, k: r.k, color: '#8fb4d9', flatshading: true, name: 'surface' }];
+  if (r.triangle_count <= 5000) {  // wireframe edges only for small models (keeps big meshes fast)
+    const ex = [], ey = [], ez = [];
+    for (let t = 0; t < r.i.length; t++) {
+      for (const v of [r.i[t], r.j[t], r.k[t], r.i[t], null]) {
+        ex.push(v === null ? null : r.x[v]); ey.push(v === null ? null : r.y[v]); ez.push(v === null ? null : r.z[v]);
+      }
+    }
+    traces.push({ type: 'scatter3d', mode: 'lines', x: ex, y: ey, z: ez, line: { color: '#1f3a5f', width: 2 }, hoverinfo: 'skip', name: 'edges' });
+  }
+  Plotly.newPlot('stl-plot', traces, sceneLayout(`${r.name || 'STL'} (${r.triangle_count} triangles)`), { responsive: true });
+  $('stl-stats').innerHTML = statsTable([
+    ['Source', r.source], ['Solid name', r.name || '(unnamed)'], ['Triangles', r.triangle_count], ['Unique vertices', r.vertex_count],
+    ['Bounding box min (m)', fmt3(r.bbox.min)], ['Bounding box max (m)', fmt3(r.bbox.max)], ['Units', r.units],
+  ]);
+  $('stl-fit').disabled = $('stl-export').disabled = false;
+}
+
+function renderCsv(r) {
+  geo.csv = r;
+  const trace = {
+    type: 'scatter3d', mode: 'markers', x: r.x, y: r.y, z: r.z, customdata: r.node_id.map((id, n) => [id, r.T[n]]),
+    marker: {
+      size: 3, color: r.T, colorscale: 'Jet', cmin: r.t_min_C, cmax: r.t_max_C,
+      colorbar: { title: 'Temperature (°C)' },
+    },
+    hovertemplate: 'node_id %{customdata[0]}<br>x %{x:.5g} m<br>y %{y:.5g} m<br>z %{z:.5g} m<br>T %{customdata[1]:.4g} °C<extra></extra>',
+  };
+  Plotly.newPlot('csv-plot', [trace], sceneLayout('Nodal temperature (°C)'), { responsive: true });
+  $('csv-plot').on('plotly_click', (ev) => {
+    const p = ev.points[0];
+    showGeoMessage('node-info', `Selected node ${p.customdata[0]}: x = ${p.x} m, y = ${p.y} m, z = ${p.z} m, T = ${Number(geo.csv.T[p.pointNumber]).toFixed(4)} °C`);
+  });
+  const shown = r.display_stride > 1 ? ` (showing every ${r.display_stride}th node: ${r.displayed_count} of ${r.node_count})` : '';
+  $('csv-stats').innerHTML = statsTable([
+    ['Source', r.source], ['Nodes', `${r.node_count}${shown}`], ['Bounding box min (m)', fmt3(r.bbox.min)],
+    ['Bounding box max (m)', fmt3(r.bbox.max)], ['Temperature range (°C)', `${r.t_min_C.toPrecision(5)} to ${r.t_max_C.toPrecision(5)}`],
+  ]);
+  $('csv-fit').disabled = $('csv-export').disabled = $('node-lookup').disabled = false;
+}
+
+function wireGeometry(kind, render) {
+  const handle = async (file) => {
+    try { render(await loadGeometry(kind, file)); } catch (e) {
+      status.set('Could not load the file', 'err');
+      showGeoMessage(`${kind}-msg`, e.message, true);
+    }
+  };
+  $(`${kind}-file`).onchange = (ev) => ev.target.files[0] && handle(ev.target.files[0]);
+  $(`${kind}-sample`).onclick = () => handle(null);
+  $(`${kind}-fit`).onclick = () => fitToView(`${kind}-plot`);
+  $(`${kind}-export`).onclick = () => {
+    const { x, y, z, i, j, k, node_id, T, ...summary } = geo[kind];  // drop the bulk arrays
+    download(`${kind}_summary.json`, JSON.stringify(summary, null, 2), 'application/json');
+  };
+}
+wireGeometry('stl', renderStl);
+wireGeometry('csv', renderCsv);
+
+$('node-lookup').onclick = async () => {
+  try {
+    const n = await api(`/api/geometry/node/${encodeURIComponent($('node-id').value.trim())}`);
+    showGeoMessage('node-info', `Node ${n.node_id}: x = ${n.x_m} m, y = ${n.y_m} m, z = ${n.z_m} m, T = ${n.temperature_C} °C`);
+  } catch (e) { showGeoMessage('node-info', e.message, true); }
+};
+
 // ---------- Performance ----------
 const perf = { result: null };
 

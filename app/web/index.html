@@ -19,7 +19,34 @@
 </header>
 
 <main>
-  <section id="tab-geometry" class="tab active"><p>Geometry view: coming in a later phase.</p></section>
+  <section id="tab-geometry" class="tab active">
+    <h3>CAD geometry: ASCII STL</h3>
+    <p class="note">Drag to rotate, right-drag or shift-drag to pan, wheel to zoom. STL files carry no units; metres are assumed. Binary STL is not supported.</p>
+    <div class="row">
+      <label>STL file<input type="file" id="stl-file" accept=".stl,.txt"></label>
+      <button id="stl-sample">Load sample cube.stl</button>
+      <button id="stl-fit" disabled>Fit to view</button>
+      <button id="stl-export" disabled>Export summary (JSON)</button>
+    </div>
+    <div id="stl-msg" class="msg"></div>
+    <table id="stl-stats" class="data"></table>
+    <div id="stl-plot" class="plot tall"></div>
+
+    <h3>ANSYS-style nodal temperatures (CSV point cloud)</h3>
+    <p class="note">Columns: <code>node_id,x_m,y_m,z_m,temperature_C</code> (metres, &deg;C). The bundled sample is SYNTHETIC, not an actual ANSYS export. Hover or click a node to inspect it.</p>
+    <div class="row">
+      <label>CSV file<input type="file" id="csv-file" accept=".csv,.txt"></label>
+      <button id="csv-sample">Load sample synthetic_temperature.csv</button>
+      <button id="csv-fit" disabled>Fit to view</button>
+      <button id="csv-export" disabled>Export summary (JSON)</button>
+      <label>Inspect node_id<input id="node-id" size="8"></label>
+      <button id="node-lookup" disabled>Look up</button>
+    </div>
+    <div id="csv-msg" class="msg"></div>
+    <table id="csv-stats" class="data"></table>
+    <div id="node-info" class="msg"></div>
+    <div id="csv-plot" class="plot tall"></div>
+  </section>
 
   <section id="tab-thermal" class="tab">
     <h3>1D steady thermal FEA &mdash; uniform rod, two-node linear elements</h3>

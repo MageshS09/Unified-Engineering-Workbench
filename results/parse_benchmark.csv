@@ -1,0 +1,4 @@
+case,size_MB,items,parse_s,items_per_s
+STL 200k triangles,20.2,200000,0.304,657974
+CSV 1M nodes,39.4,1000000,0.234,4282417
+CSV 3M nodes,120.6,3000000,1.290,2324763

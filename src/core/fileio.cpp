@@ -4,7 +4,25 @@
 #include <fstream>
 #include <stdexcept>
 
+#include "parse_util.h"
+
+#include "parse_util.h"
+
 namespace wb {
+
+std::string readTextFile(const std::string& path, std::uint64_t max_bytes) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const std::uintmax_t size = fs::file_size(fs::path(path), ec);
+    if (ec) throw ParseError("Cannot open '" + path + "'. Check that the file exists and is readable.");
+    checkFileSize(size, max_bytes);
+    std::ifstream in(fs::path(path), std::ios::binary);
+    if (!in) throw ParseError("Cannot open '" + path + "'. Check that the file is not locked by another program.");
+    std::string text(static_cast<size_t>(size), ' ');
+    in.read(text.data(), static_cast<std::streamsize>(size));
+    if (!in) throw ParseError("Reading '" + path + "' failed part-way. Try copying the file locally and retry.");
+    return text;
+}
 
 void writeFileAtomic(const std::string& path, const std::string& content) {
     namespace fs = std::filesystem;
