@@ -8,6 +8,7 @@
 namespace api {
 
 void registerComputeRoutes(httplib::Server& svr, wb::JobManager& jobs);
+void registerDeviceRoutes(httplib::Server& svr);
 // data_dir holds the packaged sample files (cube.stl, synthetic_temperature.csv); may not exist.
 void registerGeometryRoutes(httplib::Server& svr, const std::filesystem::path& data_dir);
 

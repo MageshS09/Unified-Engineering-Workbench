@@ -283,6 +283,68 @@ $('node-lookup').onclick = async () => {
   } catch (e) { showGeoMessage('node-info', e.message, true); }
 };
 
+// ---------- Hardware (all devices are SIMULATED by the backend) ----------
+const hw = { log: [] };
+
+function hwLog(text) {
+  hw.log.push({ time: new Date().toISOString(), event: text });
+  $('hw-log').textContent = hw.log.map((e) => `${e.time}  ${e.event}`).join('\n');
+  $('hw-export-log').disabled = false;
+}
+
+function hwMessage(text, isError) {
+  $('hw-msg').textContent = text;
+  $('hw-msg').className = 'msg' + (isError ? ' err' : '');
+}
+
+async function hwRefresh() {
+  const r = await api('/api/devices');
+  $('hw-fault').checked = r.pending_timeouts > 0;
+  $('hw-table').innerHTML = '<tr><th>Device</th><th>Represents (assumed)</th><th>State</th><th>Actions</th></tr>' +
+    r.devices.map((d) => `<tr><td><span class="badge">SIMULATED</span>${d.name}<br><small>${d.id} / ${d.kind}</small></td>` +
+      `<td>${d.board_class}</td><td class="state-${d.state}">${d.state}</td><td>` +
+      ['connect', 'retry', 'disconnect', 'telemetry', 'caps'].map((a) => `<button data-hw="${a}" data-id="${d.id}">${{
+        connect: 'Connect', retry: 'Connect with retry', disconnect: 'Disconnect', telemetry: 'Read telemetry', caps: 'Capabilities',
+      }[a]}</button>`).join(' ') + '</td></tr>').join('');
+  document.querySelectorAll('#hw-table button').forEach((b) => (b.onclick = () => hwAction(b.dataset.hw, b.dataset.id)));
+}
+
+async function hwAction(action, id) {
+  try {
+    if (action === 'caps') {
+      $('hw-caps').textContent = JSON.stringify(await api(`/api/devices/${id}/capabilities`), null, 2);
+    } else if (action === 'telemetry') {
+      const t = await api(`/api/devices/${id}/telemetry`);
+      $('hw-telemetry').textContent = JSON.stringify(t, null, 2);
+      hwLog(`${id}: telemetry seq ${t.seq} (SIMULATED)`);
+    } else if (action === 'disconnect') {
+      await api(`/api/devices/${id}/disconnect`, { method: 'POST' });
+      hwLog(`${id}: disconnected`);
+    } else {
+      const r = await api(`/api/devices/${id}/connect`, { method: 'POST', body: JSON.stringify({ retry: action === 'retry' }) });
+      if (r.attempts.length === 0) hwLog(`${id}: connected`);
+      r.attempts.forEach((a) => hwLog(`${id}: attempt ${a.attempt} ${a.ok ? 'OK' : 'FAILED'} - ${a.message}` + (a.backoff_ms_after ? ` (waiting ${a.backoff_ms_after} ms before retry)` : '')));
+      if (!r.connected) hwMessage(`${id} could not connect after ${r.attempts.length} attempts. Clear the fault or retry later.`, true);
+    }
+    if (action !== 'caps' && action !== 'telemetry') hwMessage('');
+  } catch (e) {
+    hwLog(`${id}: ${action} failed - ${e.message}`);
+    hwMessage(e.message, true);
+  }
+  await hwRefresh().catch(() => {});
+}
+
+$('hw-refresh').onclick = () => hwRefresh().then(() => hwLog('discovery: 3 simulated devices')).catch((e) => hwMessage(e.message, true));
+$('hw-fault').onchange = async (ev) => {
+  try {
+    await api('/api/devices/fault', { method: 'POST', body: JSON.stringify({ simulate_timeout: ev.target.checked }) });
+    hwLog(ev.target.checked ? 'fault injection ON: next 2 connect attempts will time out (SIMULATED)' : 'fault injection OFF');
+    await hwRefresh();
+  } catch (e) { hwMessage(e.message, true); }
+};
+$('hw-export-log').onclick = () => download('hardware_event_log.json', JSON.stringify({ label: 'SIMULATED', events: hw.log }, null, 2), 'application/json');
+hwRefresh().catch(() => {});
+
 // ---------- Performance ----------
 const perf = { result: null };
 

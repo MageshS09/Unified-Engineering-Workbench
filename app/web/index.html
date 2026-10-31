@@ -104,7 +104,23 @@
     <table id="perf-table" class="data"></table>
     <div id="perf-plot" class="plot"></div>
   </section>
-  <section id="tab-hardware" class="tab"><p>Hardware view: coming in a later phase.</p></section>
+  <section id="tab-hardware" class="tab">
+    <h3>Embedded hardware workbench (SIMULATED)</h3>
+    <div class="banner">SIMULATED: no physical board is connected. The microcontroller, FPGA board and JTAG adapter below are mock adapters implemented in the C++ backend. See docs/embedded_design.md for the real integration design.</div>
+    <div class="row">
+      <label class="inline"><input type="checkbox" id="hw-fault"> Simulate timeout (the next 2 connect attempts time out, then the fault clears)</label>
+      <button id="hw-refresh">Discover devices</button>
+      <button id="hw-export-log" disabled>Export event log (JSON)</button>
+    </div>
+    <div id="hw-msg" class="msg"></div>
+    <table id="hw-table" class="data left"></table>
+    <h4>Capabilities</h4>
+    <pre id="hw-caps" class="out">Select "Capabilities" for a device.</pre>
+    <h4>Telemetry (one SIMULATED message per click)</h4>
+    <pre id="hw-telemetry" class="out">Connect a device, then select "Read telemetry".</pre>
+    <h4>Event log</h4>
+    <pre id="hw-log" class="out"></pre>
+  </section>
 </main>
 
 <footer id="statusbar" class="ok">

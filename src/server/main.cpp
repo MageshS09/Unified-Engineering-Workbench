@@ -140,6 +140,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     api::registerComputeRoutes(svr, jobs);
     api::registerGeometryRoutes(svr, findDataDir(exe_dir));
+    api::registerDeviceRoutes(svr);
 
     // Loopback only: the workbench is never exposed to the network.
     const int port = svr.bind_to_any_port("127.0.0.1");
