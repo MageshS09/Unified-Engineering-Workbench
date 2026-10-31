@@ -45,6 +45,17 @@
     <div id="fea-err-plot" class="plot"></div>
     <div id="fea-conv-plot" class="plot"></div>
     <table id="fea-table" class="data"></table>
+
+    <h3>Backpropagation check (Task F)</h3>
+    <p class="note">One neuron: h = tanh(wx+b), &#375; = vh+c, J = &frac12;(&#375;&minus;y)&sup2;; x = 1, y = 2, learning rate 0.1. Gradients are hand-derived in C++ (no autodiff) and checked by central differences (&epsilon; = 1e-6).</p>
+    <div class="row">
+      <button id="bp-run" class="primary">Run backprop check</button>
+      <button id="bp-export-loss" disabled>Export loss CSV</button>
+      <button id="bp-export-check" disabled>Export gradient check CSV</button>
+    </div>
+    <div id="bp-msg" class="msg"></div>
+    <table id="bp-table" class="data"></table>
+    <div id="bp-plot" class="plot"></div>
   </section>
 
   <section id="tab-performance" class="tab"><p>Performance view: coming in a later phase.</p></section>

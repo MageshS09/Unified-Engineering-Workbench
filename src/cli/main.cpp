@@ -5,8 +5,10 @@
 #include <filesystem>
 #include <iostream>
 
+#include "backprop.h"
 #include "fea_study.h"
 #include "fileio.h"
+#include "svg_plot.h"
 #include "sysinfo.h"
 
 namespace fs = std::filesystem;
@@ -43,6 +45,33 @@ void writeFeaResults(const fs::path& out) {
                   << "\n";
 }
 
+// Step 0 = initial parameters, step 1 = the single hand-checked update, steps 2..101 = 100 subsequent updates.
+void writeBackpropResults(const fs::path& out) {
+    const wb::BackpropSetup setup;
+    const wb::NeuronParams start;
+    const auto checks = wb::gradientCheck(setup, start);
+    const std::vector<double> loss = wb::trainLoss(setup, start, 101);
+    wb::writeFileAtomic((out / "backprop_gradcheck.csv").string(), wb::gradCheckCsv(checks));
+    wb::writeFileAtomic((out / "backprop_loss.csv").string(), wb::lossCsv(loss));
+
+    wb::PlotSpec spec;
+    spec.title = "Backpropagation: loss J vs training step (lr = 0.1)";
+    spec.x_label = "training step (step 1 = first update)";
+    spec.y_label = "loss J (dimensionless)";
+    wb::PlotSeries ser{"J", {}, {}, "#1f77b4", false, false};
+    for (size_t i = 0; i < loss.size(); ++i) {
+        ser.x.push_back(static_cast<double>(i));
+        ser.y.push_back(loss[i]);
+    }
+    spec.series.push_back(ser);
+    wb::writeFileAtomic((out / "backprop_loss.svg").string(), wb::renderSvg(spec));
+    std::cout << "Backprop: wrote backprop_gradcheck.csv, backprop_loss.csv, backprop_loss.svg (final loss "
+              << loss.back() << ")" << std::endl;
+    for (const auto& r : checks)
+        std::cout << "  d" << r.name << ": |analytic-numeric| = " << r.abs_error << (r.pass ? " ok" : " FAIL")
+                  << std::endl;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -51,6 +80,7 @@ int main(int argc, char** argv) {
         const wb::BuildInfo info = wb::buildInfo();
         std::cout << "workbench_cli: " << info.compiler << " [" << info.flags << "]\nresults dir: " << out.string() << "\n";
         writeFeaResults(out);
+        writeBackpropResults(out);
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "workbench_cli failed: " << e.what() << "\n";

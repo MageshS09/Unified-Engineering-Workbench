@@ -170,4 +170,28 @@ $('fea-export-sol').onclick = () => {
   download(`fea_N${n}.csv`, fea.result.csv[`N${n}`]);
 };
 
+// ---------- Backpropagation panel ----------
+const bp = { result: null };
+$('bp-run').onclick = async () => {
+  try {
+    bp.result = await api('/api/backprop');
+    const r = bp.result;
+    const f = (v) => Number(v).toFixed(7);
+    $('bp-table').innerHTML = '<tr><th>parameter</th><th>analytic dJ/dp</th><th>numeric (central diff)</th><th>|error|</th><th>pass (≤ 1e-5)</th><th>after one update</th></tr>' +
+      r.gradcheck.map((c) => `<tr><td>${c.parameter}</td><td>${f(c.analytic)}</td><td>${f(c.numeric)}</td><td>${c.abs_error.toExponential(2)}</td><td>${c.pass ? 'yes' : 'NO'}</td><td>${f(r.updated[c.parameter])}</td></tr>`).join('');
+    Plotly.newPlot('bp-plot', [{ x: r.loss.map((_, i) => i), y: r.loss, mode: 'lines', name: 'J' }], {
+      title: `Loss vs training step (lr = 0.1); J(initial) = ${f(r.forward.loss)}`,
+      xaxis: { title: 'training step (step 1 = first update)' }, yaxis: { title: 'loss J (dimensionless)' }, margin: { t: 40 },
+    }, { responsive: true });
+    $('bp-msg').textContent = '';
+    $('bp-msg').className = 'msg';
+    $('bp-export-loss').disabled = $('bp-export-check').disabled = false;
+  } catch (e) {
+    $('bp-msg').textContent = e.message;
+    $('bp-msg').className = 'msg err';
+  }
+};
+$('bp-export-loss').onclick = () => download('backprop_loss.csv', bp.result.csv.loss);
+$('bp-export-check').onclick = () => download('backprop_gradcheck.csv', bp.result.csv.gradcheck);
+
 checkHealth();

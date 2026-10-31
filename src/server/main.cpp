@@ -11,6 +11,7 @@
 #include <string>
 #include <thread>
 
+#include "backprop.h"
 #include "fea_study.h"
 #include "httplib.h"
 #include "jobs.h"
@@ -172,6 +173,32 @@ void registerFeaRoutes(httplib::Server& svr, wb::JobManager& jobs) {
     });
 }
 
+json backpropJson() {
+    const wb::BackpropSetup setup;
+    const wb::NeuronParams start;
+    const wb::Forward f = wb::forwardPass(setup, start);
+    const wb::Gradients g = wb::analyticGradients(setup, start);
+    const wb::NeuronParams next = wb::gradientStep(setup, start, g);
+    const std::vector<double> loss = wb::trainLoss(setup, start, 101);
+    const auto checkRows = wb::gradientCheck(setup, start);
+    json checks = json::array();
+    for (const auto& r : checkRows)
+        checks.push_back({{"parameter", r.name}, {"analytic", r.analytic}, {"numeric", r.numeric},
+                          {"abs_error", r.abs_error}, {"pass", r.pass}});
+    return {{"forward", {{"z", f.z}, {"h", f.h}, {"y_hat", f.y_hat}, {"loss", f.loss}}},
+            {"gradients", {{"w", g.dw}, {"b", g.db}, {"v", g.dv}, {"c", g.dc}}},
+            {"updated", {{"w", next.w}, {"b", next.b}, {"v", next.v}, {"c", next.c}}},
+            {"gradcheck", checks},
+            {"loss", loss},
+            {"csv", {{"loss", wb::lossCsv(loss)}, {"gradcheck", wb::gradCheckCsv(checkRows)}}}};
+}
+
+void registerBackpropRoute(httplib::Server& svr) {
+    svr.Get("/api/backprop", [](const httplib::Request&, httplib::Response& res) {
+        res.set_content(backpropJson().dump(), "application/json");
+    });
+}
+
 void registerJobRoutes(httplib::Server& svr, wb::JobManager& jobs) {
     svr.Get("/api/jobs/:id", [&jobs](const httplib::Request& req, httplib::Response& res) {
         wb::JobSnapshot snap;
@@ -229,6 +256,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     });
 
     registerFeaRoutes(svr, jobs);
+    registerBackpropRoute(svr);
     registerJobRoutes(svr, jobs);
 
     // Loopback only: the workbench is never exposed to the network.
