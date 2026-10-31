@@ -2,13 +2,61 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Unified Engineering Workbench</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header><h2>Unified Engineering Workbench</h2></header>
-<main><p>Phase 0 skeleton.</p></main>
-<div id="statusbar">Connecting to backend...</div>
+<header>
+  <h2>Unified Engineering Workbench</h2>
+  <nav id="tabs">
+    <button data-tab="geometry" class="active">Geometry</button>
+    <button data-tab="thermal">Thermal Analysis</button>
+    <button data-tab="performance">Performance</button>
+    <button data-tab="hardware">Hardware</button>
+  </nav>
+  <button id="quit" title="Stop the local backend and close the workbench">Quit</button>
+</header>
+
+<main>
+  <section id="tab-geometry" class="tab active"><p>Geometry view: coming in a later phase.</p></section>
+
+  <section id="tab-thermal" class="tab">
+    <h3>1D steady thermal FEA &mdash; uniform rod, two-node linear elements</h3>
+    <p class="note">Solves &minus;d/dx(kA dT/dx) = qA with T(0) and T(L) prescribed; lateral surfaces insulated, constant properties.</p>
+    <form id="fea-form" class="grid">
+      <label>L (m)<input name="length_m" value="1"></label>
+      <label>A (m&sup2;)<input name="area_m2" value="1e-4"></label>
+      <label>k (W/(m&middot;K))<input name="k_W_mK" value="10"></label>
+      <label>q (W/m&sup3;)<input name="q_W_m3" value="10000"></label>
+      <label>T(0) (&deg;C)<input name="t_left_C" value="100"></label>
+      <label>T(L) (&deg;C)<input name="t_right_C" value="20"></label>
+      <label>Meshes N (comma list)<input name="meshes" value="10,20,40,80"></label>
+    </form>
+    <div class="row">
+      <button id="fea-solve" class="primary">Solve</button>
+      <button id="fea-export-conv" disabled>Export convergence CSV</button>
+      <label>Export solution CSV for N
+        <select id="fea-export-n" disabled></select></label>
+      <button id="fea-export-sol" disabled>Export</button>
+    </div>
+    <div id="fea-msg" class="msg"></div>
+    <div id="fea-plot" class="plot"></div>
+    <div id="fea-err-plot" class="plot"></div>
+    <div id="fea-conv-plot" class="plot"></div>
+    <table id="fea-table" class="data"></table>
+  </section>
+
+  <section id="tab-performance" class="tab"><p>Performance view: coming in a later phase.</p></section>
+  <section id="tab-hardware" class="tab"><p>Hardware view: coming in a later phase.</p></section>
+</main>
+
+<footer id="statusbar" class="ok">
+  <span id="status-text">Connecting to backend...</span>
+  <progress id="status-progress" value="0" max="1" hidden></progress>
+  <button id="status-cancel" hidden>Cancel</button>
+</footer>
+<script src="vendor/plotly.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

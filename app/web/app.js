@@ -1,15 +1,173 @@
-// Presentation only: all computation happens in the C++ backend.
+// Presentation only: all computation happens in the C++ backend (see src/server, src/core).
+'use strict';
+
+const $ = (id) => document.getElementById(id);
+
+// ---------- status bar + job polling ----------
+const status = {
+  set(text, cls) {
+    $('status-text').textContent = text;
+    $('statusbar').className = cls || 'ok';
+  },
+};
+
+async function api(path, options) {
+  const r = await fetch(path, options);
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.error || `Request failed (${r.status}).`);
+  return body;
+}
+
+// Runs a backend job, polling until done; resolves with the result, rejects on failure/cancel.
+function pollJob(jobId, label, onBusy) {
+  let finished = false;
+  const cancelBtn = $('status-cancel');
+  cancelBtn.hidden = false;
+  cancelBtn.onclick = () => api(`/api/jobs/${jobId}/cancel`, { method: 'POST' }).catch(() => {});
+  $('status-progress').hidden = false;
+  onBusy(true);
+  const finish = () => {
+    finished = true;
+    cancelBtn.hidden = true;
+    $('status-progress').hidden = true;
+    onBusy(false);
+  };
+  return new Promise((resolve, reject) => {
+    const tick = async () => {
+      if (finished) return;
+      try {
+        const j = await api(`/api/jobs/${jobId}`);
+        $('status-progress').value = j.progress;
+        status.set(`${label}: ${Math.round(j.progress * 100)}%`, 'busy');
+        if (j.state === 'running') return setTimeout(tick, 100);
+        finish();
+        if (j.state === 'done') { status.set(`${label}: done`, 'ok'); resolve(j.result); }
+        else if (j.state === 'cancelled') { status.set(`${label}: cancelled, no results were kept`, 'err'); reject(new Error('Cancelled. Press Solve to run again.')); }
+        else { status.set(`${label}: failed`, 'err'); reject(new Error(j.error || 'The job failed.')); }
+      } catch (e) {
+        finish();
+        status.set('Lost contact with the backend. Restart Launch.exe.', 'err');
+        reject(e);
+      }
+    };
+    tick();
+  });
+}
+
+function download(filename, text, mime) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: mime || 'text/csv' }));
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ---------- tabs, health, heartbeat, quit ----------
+document.querySelectorAll('#tabs button').forEach((b) => {
+  b.onclick = () => {
+    document.querySelectorAll('#tabs button').forEach((x) => x.classList.toggle('active', x === b));
+    document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.id === `tab-${b.dataset.tab}`));
+    window.dispatchEvent(new Event('resize'));  // let Plotly fit its container
+  };
+});
+
 async function checkHealth() {
-  const bar = document.getElementById('statusbar');
   try {
-    const r = await fetch('/api/health');
-    const h = await r.json();
-    bar.textContent = `Backend ready (launch-to-ready ${h.launch_to_ready_ms.toFixed(0)} ms)`;
-    bar.className = 'ok';
+    const h = await api('/api/health');
+    status.set(`Backend ready (launch-to-ready ${h.launch_to_ready_ms.toFixed(0)} ms)`, 'ok');
   } catch (e) {
-    bar.textContent = 'Backend not reachable. Close this tab and start Launch.exe again.';
-    bar.className = 'err';
+    status.set('Backend not reachable. Close this tab and start Launch.exe again.', 'err');
   }
 }
 setInterval(() => fetch('/api/heartbeat', { method: 'POST' }).catch(() => {}), 10000);
+$('quit').onclick = async () => {
+  await fetch('/api/shutdown', { method: 'POST' }).catch(() => {});
+  status.set('Workbench stopped. You can close this tab.', 'err');
+};
+
+// ---------- Thermal Analysis ----------
+const fea = { result: null };
+const feaFields = ['length_m', 'area_m2', 'k_W_mK', 'q_W_m3', 't_left_C', 't_right_C'];
+
+// Light client-side check for fast feedback; the C++ backend is the authority.
+function readFeaForm() {
+  const form = $('fea-form');
+  const body = {};
+  let ok = true;
+  for (const name of feaFields) {
+    const input = form.elements[name];
+    const v = Number(input.value);
+    const positive = ['length_m', 'area_m2', 'k_W_mK'].includes(name);
+    const bad = input.value.trim() === '' || !Number.isFinite(v) || (positive && v <= 0);
+    input.classList.toggle('invalid', bad);
+    if (bad) ok = false;
+    body[name] = v;
+  }
+  const meshInput = form.elements.meshes;
+  const meshes = meshInput.value.split(',').map((s) => s.trim()).filter(Boolean).map(Number);
+  const badMesh = meshes.length === 0 || meshes.some((n) => !Number.isInteger(n) || n < 1);
+  meshInput.classList.toggle('invalid', badMesh);
+  body.meshes = meshes;
+  return ok && !badMesh ? body : null;
+}
+
+function setFeaBusy(busy) {
+  ['fea-solve'].forEach((id) => ($(id).disabled = busy));
+}
+
+function showFeaMessage(text, isError) {
+  $('fea-msg').textContent = text;
+  $('fea-msg').className = 'msg' + (isError ? ' err' : '');
+}
+
+function renderFea(res) {
+  const sols = res.solutions;
+  const traces = [];
+  const first = sols[sols.length - 1];
+  traces.push({ x: first.x_m, y: first.T_exact_C, name: 'exact', mode: 'lines', line: { color: 'black', dash: 'dash' } });
+  sols.forEach((s) => traces.push({ x: s.x_m, y: s.T_fe_C, name: `FE N=${s.N}`, mode: s.N <= 20 ? 'lines+markers' : 'lines' }));
+  Plotly.newPlot('fea-plot', traces, {
+    title: 'Temperature along the rod', xaxis: { title: 'x (m)' }, yaxis: { title: 'T (°C)' }, margin: { t: 40 },
+  }, { responsive: true });
+
+  // Error at nodes is round-off; the meaningful error is the FE interpolant between nodes.
+  Plotly.newPlot('fea-err-plot', sols.map((s) => ({ x: s.x_m, y: s.abs_err_C, name: `N=${s.N}`, mode: 'lines' })), {
+    title: 'Absolute error at nodes (°C)', xaxis: { title: 'x (m)' }, yaxis: { title: '|T_FE − T_exact| at nodes (°C)', type: 'log' }, margin: { t: 40 },
+  }, { responsive: true });
+
+  const conv = res.convergence;
+  Plotly.newPlot('fea-conv-plot', [{
+    x: conv.map((r) => r.h_m), y: conv.map((r) => r.max_midpoint_err_C), mode: 'lines+markers', name: 'max midpoint error',
+  }], {
+    title: 'Mesh convergence', xaxis: { title: 'h (m)', type: 'log' }, yaxis: { title: 'max midpoint error (°C)', type: 'log' }, margin: { t: 40 },
+  }, { responsive: true });
+
+  const fmt = (v, p) => (v === null ? '–' : Number(v).toPrecision(p));
+  $('fea-table').innerHTML = '<tr><th>N</th><th>h (m)</th><th>max nodal error (°C)</th><th>max midpoint error (°C)</th><th>observed order</th></tr>' +
+    conv.map((r) => `<tr><td>${r.N}</td><td>${r.h_m}</td><td>${r.max_nodal_err_C.toExponential(2)}</td><td>${fmt(r.max_midpoint_err_C, 8)}</td><td>${fmt(r.observed_order, 4)}</td></tr>`).join('');
+
+  const sel = $('fea-export-n');
+  sel.innerHTML = sols.map((s) => `<option value="${s.N}">${s.N}</option>`).join('');
+  ['fea-export-conv', 'fea-export-n', 'fea-export-sol'].forEach((id) => ($(id).disabled = false));
+}
+
+$('fea-solve').onclick = async () => {
+  const body = readFeaForm();
+  if (!body) return showFeaMessage('Some inputs are invalid (highlighted). L, A, k must be > 0; meshes must be whole numbers >= 1.', true);
+  showFeaMessage('');
+  try {
+    const { job_id } = await api('/api/fea/solve', { method: 'POST', body: JSON.stringify(body) });
+    fea.result = await pollJob(job_id, 'FEA solve', setFeaBusy);
+    renderFea(fea.result);
+    showFeaMessage(`Solved ${fea.result.solutions.length} meshes.`);
+  } catch (e) {
+    showFeaMessage(e.message, true);
+  }
+};
+$('fea-export-conv').onclick = () => download('fea_convergence.csv', fea.result.csv.convergence);
+$('fea-export-sol').onclick = () => {
+  const n = $('fea-export-n').value;
+  download(`fea_N${n}.csv`, fea.result.csv[`N${n}`]);
+};
+
 checkHealth();
