@@ -58,7 +58,25 @@
     <div id="bp-plot" class="plot"></div>
   </section>
 
-  <section id="tab-performance" class="tab"><p>Performance view: coming in a later phase.</p></section>
+  <section id="tab-performance" class="tab">
+    <h3>Serial vs multicore batch of independent thermal solves</h3>
+    <p class="note">Each case is a 1D rod solve with random k and q (fixed seed). Only the compute calls are timed: 1 warm-up + 5 measured repetitions, median reported. File loading and rendering are excluded.</p>
+    <div id="perf-sys" class="note"></div>
+    <form id="perf-form" class="grid">
+      <label>Seed<input name="seed" value="42"></label>
+      <label>Cases<input name="cases" value="400"></label>
+      <label>Mesh (elements per case)<input name="mesh" value="2000"></label>
+      <label>Max workers (capped at logical CPUs)<input name="max_workers" value="4"></label>
+    </form>
+    <div class="row">
+      <button id="perf-run" class="primary">Run benchmark</button>
+      <button id="perf-export-csv" disabled>Export perf CSV</button>
+      <button id="perf-export-sum" disabled>Export system/summary</button>
+    </div>
+    <div id="perf-msg" class="msg"></div>
+    <table id="perf-table" class="data"></table>
+    <div id="perf-plot" class="plot"></div>
+  </section>
   <section id="tab-hardware" class="tab"><p>Hardware view: coming in a later phase.</p></section>
 </main>
 

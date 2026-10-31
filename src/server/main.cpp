@@ -12,6 +12,7 @@
 #include <thread>
 
 #include "backprop.h"
+#include "batch.h"
 #include "fea_study.h"
 #include "httplib.h"
 #include "jobs.h"
@@ -199,6 +200,65 @@ void registerBackpropRoute(httplib::Server& svr) {
     });
 }
 
+json perfResultJson(const wb::PerfReport& r) {
+    json rows = json::array();
+    for (const auto& row : r.rows)
+        rows.push_back({{"mode", row.mode}, {"workers", row.workers}, {"times_s", row.times_s},
+                        {"median_s", row.median_s}, {"speedup", row.speedup}, {"efficiency", row.efficiency},
+                        {"speedup_vs_serial", row.speedup_vs_serial}, {"max_abs_diff_C", row.max_abs_diff_C}});
+    return {{"rows", rows},
+            {"system", {{"cpu", r.system.cpu_name}, {"physical_cores", r.system.physical_cores},
+                        {"logical_cores", r.system.logical_cores}, {"ram_bytes", r.system.ram_bytes}}},
+            {"build", {{"compiler", r.build.compiler}, {"flags", r.build.flags}, {"type", r.build.build_type}}},
+            {"max_abs_diff_C", r.max_abs_diff_C}, {"agreement_ok", r.agreement_ok},
+            {"speedup_assessable", r.speedup_assessable}, {"note", r.note},
+            {"csv", {{"perf", wb::perfCsv(r)}, {"summary", wb::perfSummaryText(r)}}}};
+}
+
+int intField(const json& j, const char* key, int fallback) {
+    if (!j.contains(key)) return fallback;
+    if (!j[key].is_number_integer()) throw std::invalid_argument(std::string("Field '") + key + "' must be a whole number.");
+    return j[key].get<int>();
+}
+
+void registerPerfRoutes(httplib::Server& svr, wb::JobManager& jobs) {
+    svr.Get("/api/sysinfo", [](const httplib::Request&, httplib::Response& res) {
+        const wb::SystemInfo s = wb::querySystemInfo();
+        res.set_content(json{{"cpu", s.cpu_name}, {"physical_cores", s.physical_cores},
+                             {"logical_cores", s.logical_cores}, {"ram_bytes", s.ram_bytes}}.dump(),
+                        "application/json");
+    });
+    svr.Post("/api/perf/run", [&jobs](const httplib::Request& req, httplib::Response& res) {
+        try {
+            const json body = json::parse(req.body.empty() ? "{}" : req.body);
+            wb::PerfConfig cfg;
+            if (body.contains("seed")) {
+                if (!body["seed"].is_number_unsigned()) throw std::invalid_argument("Seed must be a non-negative whole number.");
+                cfg.batch.seed = body["seed"].get<std::uint64_t>();
+            }
+            cfg.batch.cases = intField(body, "cases", cfg.batch.cases);
+            cfg.batch.mesh = intField(body, "mesh", cfg.batch.mesh);
+            cfg.max_workers = intField(body, "max_workers", cfg.max_workers);
+            wb::validate(cfg);  // fail fast, before starting a job
+            const std::string id = jobs.submit([cfg](wb::JobContext& ctx) {
+                const wb::PerfReport rep = wb::runBenchmark(
+                    cfg,
+                    [&ctx](double f) {
+                        ctx.setProgress(f);
+                        ctx.throwIfCancelled();
+                    },
+                    [&ctx] { return ctx.cancelled(); });
+                return perfResultJson(rep);
+            });
+            res.set_content(json{{"job_id", id}}.dump(), "application/json");
+        } catch (const json::exception&) {
+            sendError(res, 400, "Request body is not valid JSON. Reload the page and try again.");
+        } catch (const std::invalid_argument& e) {
+            sendError(res, 400, e.what());
+        }
+    });
+}
+
 void registerJobRoutes(httplib::Server& svr, wb::JobManager& jobs) {
     svr.Get("/api/jobs/:id", [&jobs](const httplib::Request& req, httplib::Response& res) {
         wb::JobSnapshot snap;
@@ -257,6 +317,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     registerFeaRoutes(svr, jobs);
     registerBackpropRoute(svr);
+    registerPerfRoutes(svr, jobs);
     registerJobRoutes(svr, jobs);
 
     // Loopback only: the workbench is never exposed to the network.

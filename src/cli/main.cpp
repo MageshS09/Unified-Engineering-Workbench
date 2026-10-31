@@ -6,6 +6,7 @@
 #include <iostream>
 
 #include "backprop.h"
+#include "batch.h"
 #include "fea_study.h"
 #include "fileio.h"
 #include "svg_plot.h"
@@ -72,6 +73,17 @@ void writeBackpropResults(const fs::path& out) {
                   << std::endl;
 }
 
+void writePerfResults(const fs::path& out) {
+    const wb::PerfReport rep = wb::runBenchmark(wb::PerfConfig{});
+    wb::writeFileAtomic((out / "perf.csv").string(), wb::perfCsv(rep));
+    wb::writeFileAtomic((out / "perf_speedup.svg").string(), wb::perfSpeedupSvg(rep));
+    wb::writeFileAtomic((out / "sysinfo.txt").string(), wb::perfSummaryText(rep));
+    std::cout << wb::perfSummaryText(rep);
+    for (const auto& r : rep.rows)
+        std::cout << "  " << r.mode << " p=" << r.workers << " median=" << r.median_s << " s speedup=" << r.speedup
+                  << " eff=" << r.efficiency << std::endl;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -81,6 +93,7 @@ int main(int argc, char** argv) {
         std::cout << "workbench_cli: " << info.compiler << " [" << info.flags << "]\nresults dir: " << out.string() << "\n";
         writeFeaResults(out);
         writeBackpropResults(out);
+        writePerfResults(out);
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "workbench_cli failed: " << e.what() << "\n";

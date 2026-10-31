@@ -170,6 +170,63 @@ $('fea-export-sol').onclick = () => {
   download(`fea_N${n}.csv`, fea.result.csv[`N${n}`]);
 };
 
+// ---------- Performance ----------
+const perf = { result: null };
+
+function readPerfForm() {
+  const form = $('perf-form');
+  const body = {};
+  let ok = true;
+  for (const name of ['seed', 'cases', 'mesh', 'max_workers']) {
+    const input = form.elements[name];
+    const v = Number(input.value);
+    const bad = input.value.trim() === '' || !Number.isInteger(v) || v < (name === 'seed' ? 0 : 1);
+    input.classList.toggle('invalid', bad);
+    if (bad) ok = false;
+    body[name] = v;
+  }
+  return ok ? body : null;
+}
+
+function renderPerf(r) {
+  const par = r.rows.filter((x) => x.mode === 'parallel');
+  $('perf-table').innerHTML = '<tr><th>mode</th><th>workers</th><th>median (ms)</th><th>speedup T1/Tp</th><th>efficiency</th><th>speedup vs serial</th><th>max |ΔT| vs serial (°C)</th></tr>' +
+    r.rows.map((x) => `<tr><td>${x.mode}</td><td>${x.workers}</td><td>${(x.median_s * 1000).toFixed(2)}</td>` +
+      (x.mode === 'parallel'
+        ? `<td>${x.speedup.toFixed(3)}</td><td>${x.efficiency.toFixed(3)}</td><td>${x.speedup_vs_serial.toFixed(3)}</td>`
+        : '<td>–</td><td>–</td><td>–</td>') + `<td>${x.max_abs_diff_C.toExponential(2)}</td></tr>`).join('');
+  Plotly.newPlot('perf-plot', [
+    { x: par.map((x) => x.workers), y: par.map((x) => x.workers), mode: 'lines', name: 'ideal (= p)', line: { dash: 'dash', color: 'black' } },
+    { x: par.map((x) => x.workers), y: par.map((x) => x.speedup), mode: 'lines+markers', name: 'measured' },
+  ], { title: 'Speedup T1/Tp', xaxis: { title: 'workers p (threads)', dtick: 1 }, yaxis: { title: 'speedup T1/Tp (dimensionless)' }, margin: { t: 40 } }, { responsive: true });
+  const s = r.system;
+  let msg = `${s.cpu}: ${s.physical_cores} physical / ${s.logical_cores} logical cores, ${(s.ram_bytes / 2 ** 30).toFixed(2)} GiB RAM. ` +
+    `${r.build.compiler}, flags ${r.build.flags}. Serial/parallel agreement: max |ΔT| = ${r.max_abs_diff_C.toExponential(2)} °C (${r.agreement_ok ? 'PASS' : 'FAIL'}, limit 1e-8).`;
+  if (r.note) msg += ' ' + r.note;
+  $('perf-msg').textContent = msg;
+  $('perf-msg').className = 'msg' + (r.agreement_ok ? '' : ' err');
+  $('perf-export-csv').disabled = $('perf-export-sum').disabled = false;
+}
+
+$('perf-run').onclick = async () => {
+  const body = readPerfForm();
+  if (!body) return ($('perf-msg').textContent = 'Seed must be a whole number >= 0; cases, mesh and max workers must be whole numbers >= 1.', $('perf-msg').className = 'msg err');
+  $('perf-msg').textContent = '';
+  try {
+    const { job_id } = await api('/api/perf/run', { method: 'POST', body: JSON.stringify(body) });
+    perf.result = await pollJob(job_id, 'Benchmark', (busy) => ($('perf-run').disabled = busy));
+    renderPerf(perf.result);
+  } catch (e) {
+    $('perf-msg').textContent = e.message;
+    $('perf-msg').className = 'msg err';
+  }
+};
+$('perf-export-csv').onclick = () => download('perf.csv', perf.result.csv.perf);
+$('perf-export-sum').onclick = () => download('sysinfo.txt', perf.result.csv.summary, 'text/plain');
+api('/api/sysinfo').then((s) => {
+  $('perf-sys').textContent = `This machine: ${s.cpu}, ${s.physical_cores} physical / ${s.logical_cores} logical cores, ${(s.ram_bytes / 2 ** 30).toFixed(2)} GiB RAM.`;
+}).catch(() => {});
+
 // ---------- Backpropagation panel ----------
 const bp = { result: null };
 $('bp-run').onclick = async () => {

@@ -22,7 +22,7 @@ set(WB_STATIC_LINK -static -static-libgcc -static-libstdc++)
 # --- core library: no HTTP/UI code -------------------------------------------
 add_library(wb_core STATIC
   src/core/sysinfo.cpp src/core/fea1d.cpp src/core/fea_study.cpp src/core/svg_plot.cpp
-  src/core/fileio.cpp src/core/jobs.cpp src/core/backprop.cpp)
+  src/core/fileio.cpp src/core/jobs.cpp src/core/backprop.cpp src/core/thread_pool.cpp src/core/batch.cpp)
 target_include_directories(wb_core PUBLIC src/core third_party/json)
 find_package(Threads REQUIRED)
 target_link_libraries(wb_core PUBLIC Threads::Threads)
@@ -41,7 +41,7 @@ target_link_libraries(workbench_cli PRIVATE wb_core ${WB_STATIC_LINK})
 
 # --- tests --------------------------------------------------------------------
 enable_testing()
-add_executable(wb_tests tests/test_main.cpp tests/test_sysinfo.cpp tests/test_fea.cpp tests/test_backprop.cpp)
+add_executable(wb_tests tests/test_main.cpp tests/test_sysinfo.cpp tests/test_fea.cpp tests/test_backprop.cpp tests/test_batch.cpp)
 target_include_directories(wb_tests PRIVATE third_party/doctest)
 target_link_libraries(wb_tests PRIVATE wb_core ${WB_STATIC_LINK})
 add_test(NAME wb_tests COMMAND wb_tests)
