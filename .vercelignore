@@ -6,3 +6,5 @@ repo.bundle
 tests/
 third_party/
 src/
+.env*
+.vercel/

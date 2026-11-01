@@ -5,3 +5,6 @@ logs/
 repo.bundle
 
 demo-dist/
+.vercel/
+.vercel
+.env*

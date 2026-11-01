@@ -74,10 +74,12 @@ node scripts\md_to_pdf.mjs docs\report.md docs\report.pdf          (report PDF)
 
 ## Static demo on Vercel
 
+**Live demo: https://unified-engineering-workbench-olive.vercel.app**
+
 The real workbench is a Windows program (`Launch.exe`) and cannot run on Vercel. `vercel.json` therefore deploys a **static demo** of the same page: `/api/*` calls are answered from responses **recorded from the real C++ backend** (`demo/data/*.json`, produced by `node scripts/record_demo.mjs`). Nothing is computed in JavaScript. Only the default FEA case and default benchmark were recorded; custom inputs, uploads and live device simulation show a clear "needs the live C++ backend" message. The status bar and a banner say it is a demo.
 
 - Build locally: `node scripts/build_demo.mjs` (creates `demo-dist/`), check it: `node tests/ui/demo_smoke.mjs` (22 checks).
-- Deploy: import this GitHub repository in Vercel (no framework, no install step; build command and output folder come from `vercel.json`), or run `npx vercel --prod` in the project root. Then test the live address: `node tests/ui/demo_smoke.mjs https://<your-project>.vercel.app`.
+- Deploy: run `vercel deploy --prod` in the project root (build command and output folder come from `vercel.json`; `.vercelignore` keeps sources and tokens out of the upload), or import this GitHub repository in Vercel. Then test the live address: `node tests/ui/demo_smoke.mjs https://<your-project>.vercel.app`.
 - Re-record after changing the backend: build, then `node scripts/record_demo.mjs build\Launch.exe`, commit `demo/data`.
 
 ## Results and evidence
