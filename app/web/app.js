@@ -6,6 +6,7 @@ const $ = (id) => document.getElementById(id);
 // ---------- status bar + job polling ----------
 const status = {
   timer: null,
+  idleText: 'Backend ready',  // replaced by checkHealth in the static demo
   set(text, cls) {
     clearTimeout(this.timer);
     $('status-text').textContent = text;
@@ -14,7 +15,7 @@ const status = {
   // Show a finished-job message, then fall back to the idle text so stale errors do not linger.
   setThenIdle(text, cls, idleMs = 8000) {
     this.set(text, cls);
-    this.timer = setTimeout(() => this.set('Backend ready', 'ok'), idleMs);
+    this.timer = setTimeout(() => this.set(this.idleText, 'ok'), idleMs);
   },
 };
 
@@ -100,7 +101,12 @@ document.querySelectorAll('#tabs button').forEach((b) => {
 async function checkHealth() {
   try {
     const h = await api('/api/health');
-    status.set(`Backend ready (launch-to-ready ${h.launch_to_ready_ms.toFixed(0)} ms)`, 'ok');
+    if (h.demo) {
+      status.idleText = h.status_text;
+      status.set(h.status_text, 'ok');
+    } else {
+      status.set(`Backend ready (launch-to-ready ${h.launch_to_ready_ms.toFixed(0)} ms)`, 'ok');
+    }
   } catch (e) {
     status.set('Backend not reachable. Close this tab and start Launch.exe again.', 'err');
   }
@@ -260,7 +266,7 @@ async function loadGeometry(kind, file) {
   const url = file ? `/api/geometry/${kind}` : `/api/geometry/sample/${kind}`;
   const opts = file ? { method: 'POST', body: file, headers: { 'Content-Type': 'application/octet-stream', 'X-Filename': encodeURIComponent(file.name) } } : undefined;
   const r = await api(url, opts);
-  status.set('Backend ready', 'ok');
+  status.set(status.idleText, 'ok');
   return r;
 }
 

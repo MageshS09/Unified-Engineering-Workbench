@@ -1,0 +1,8 @@
+build/
+dist/
+logs/
+*.zip
+repo.bundle
+tests/
+third_party/
+src/

@@ -3,3 +3,5 @@ dist/
 logs/
 *.zip
 repo.bundle
+
+demo-dist/
