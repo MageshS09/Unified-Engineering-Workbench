@@ -61,8 +61,9 @@
       <label>Meshes N (comma list)<input name="meshes" value="10,20,40,80"></label>
     </form>
     <div class="row">
-      <button id="fea-solve" class="primary">Solve</button>
+      <button id="fea-solve" class="primary jobbtn">Solve</button>
       <button id="fea-export-conv" disabled>Export convergence CSV</button>
+      <button id="fea-export-json" disabled>Export all results (JSON)</button>
       <label>Export solution CSV for N
         <select id="fea-export-n" disabled></select></label>
       <button id="fea-export-sol" disabled>Export</button>
@@ -93,10 +94,10 @@
       <label>Seed<input name="seed" value="42"></label>
       <label>Cases<input name="cases" value="400"></label>
       <label>Mesh (elements per case)<input name="mesh" value="2000"></label>
-      <label>Max workers (capped at logical CPUs)<input name="max_workers" value="4"></label>
+      <label title="Capped at the number of logical CPUs">Max workers<input name="max_workers" value="4"></label>
     </form>
     <div class="row">
-      <button id="perf-run" class="primary">Run benchmark</button>
+      <button id="perf-run" class="primary jobbtn">Run benchmark</button>
       <button id="perf-export-csv" disabled>Export perf CSV</button>
       <button id="perf-export-sum" disabled>Export system/summary</button>
     </div>
@@ -111,6 +112,7 @@
       <label class="inline"><input type="checkbox" id="hw-fault"> Simulate timeout (the next 2 connect attempts time out, then the fault clears)</label>
       <button id="hw-refresh">Discover devices</button>
       <button id="hw-export-log" disabled>Export event log (JSON)</button>
+      <button id="hw-export-telemetry" disabled>Export last telemetry (JSON)</button>
     </div>
     <div id="hw-msg" class="msg"></div>
     <table id="hw-table" class="data left"></table>

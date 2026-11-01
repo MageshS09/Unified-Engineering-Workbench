@@ -44,6 +44,12 @@ void validateMeshList(const std::vector<int>& ns);
 
 FeaSolution solveRod(const RodParams& p);
 double exactTemperature(const RodParams& p, double x_m);
+// Error of the FE interpolant at each element midpoint (one entry per element).
+struct MidpointErrors {
+    std::vector<double> x_m;
+    std::vector<double> err_C;
+};
+MidpointErrors midpointErrors(const RodParams& p, const FeaSolution& s);
 ErrorMetrics computeErrors(const RodParams& p, const FeaSolution& s);
 ConvergenceRow makeConvergenceRow(const RodParams& p, const FeaSolution& s);
 

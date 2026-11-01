@@ -6,8 +6,6 @@
 
 #include "parse_util.h"
 
-#include "parse_util.h"
-
 namespace wb {
 
 std::string readTextFile(const std::string& path, std::uint64_t max_bytes) {

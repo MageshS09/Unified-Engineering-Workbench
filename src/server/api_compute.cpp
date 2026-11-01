@@ -46,8 +46,10 @@ json feaResultJson(const wb::FeaStudy& study) {
             exact.push_back(wb::exactTemperature(q, s.x_m[i]));
             err.push_back(std::fabs(s.t_C[i] - exact.back().get<double>()));
         }
+        const wb::MidpointErrors mid = wb::midpointErrors(q, s);
         solutions.push_back({{"N", s.elements}, {"h_m", s.h_m}, {"x_m", s.x_m}, {"T_fe_C", s.t_C},
-                             {"T_exact_C", exact}, {"abs_err_C", err}});
+                             {"T_exact_C", exact}, {"abs_err_C", err},
+                             {"x_mid_m", mid.x_m}, {"midpoint_err_C", mid.err_C}});
         csv["N" + std::to_string(s.elements)] = wb::solutionCsv(q, s);
     }
     for (const auto& r : study.rows) {

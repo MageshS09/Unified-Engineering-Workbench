@@ -5,17 +5,36 @@ const $ = (id) => document.getElementById(id);
 
 // ---------- status bar + job polling ----------
 const status = {
+  timer: null,
   set(text, cls) {
+    clearTimeout(this.timer);
     $('status-text').textContent = text;
     $('statusbar').className = cls || 'ok';
   },
+  // Show a finished-job message, then fall back to the idle text so stale errors do not linger.
+  setThenIdle(text, cls, idleMs = 8000) {
+    this.set(text, cls);
+    this.timer = setTimeout(() => this.set('Backend ready', 'ok'), idleMs);
+  },
 };
 
+const BACKEND_GONE = 'Cannot reach the workbench backend. Launch.exe may have been closed: start it again and reload this page.';
+
 async function api(path, options) {
-  const r = await fetch(path, options);
+  let r;
+  try {
+    r = await fetch(path, options);
+  } catch (e) {
+    throw new Error(BACKEND_GONE);
+  }
   const body = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(body.error || `Request failed (${r.status}).`);
+  if (!r.ok) throw new Error(body.error || (r.status === 413 ? 'The upload is too large for the backend. Use a file under 200 MB.' : `Request failed (HTTP ${r.status}). Reload the page and try again.`));
   return body;
+}
+
+// Only one backend job runs at a time: every button marked .jobbtn is disabled while it runs.
+function setJobButtonsDisabled(disabled) {
+  document.querySelectorAll('.jobbtn').forEach((b) => { b.disabled = disabled; });
 }
 
 // Runs a backend job, polling until done; resolves with the result, rejects on failure/cancel.
@@ -23,13 +42,20 @@ function pollJob(jobId, label, onBusy) {
   let finished = false;
   const cancelBtn = $('status-cancel');
   cancelBtn.hidden = false;
-  cancelBtn.onclick = () => api(`/api/jobs/${jobId}/cancel`, { method: 'POST' }).catch(() => {});
+  cancelBtn.disabled = false;
+  cancelBtn.onclick = () => {
+    cancelBtn.disabled = true;  // one request is enough; the job stops between solves
+    status.set(`${label}: cancelling...`, 'busy');
+    api(`/api/jobs/${jobId}/cancel`, { method: 'POST' }).catch(() => {});
+  };
   $('status-progress').hidden = false;
+  setJobButtonsDisabled(true);
   onBusy(true);
   const finish = () => {
     finished = true;
     cancelBtn.hidden = true;
     $('status-progress').hidden = true;
+    setJobButtonsDisabled(false);
     onBusy(false);
   };
   return new Promise((resolve, reject) => {
@@ -41,12 +67,12 @@ function pollJob(jobId, label, onBusy) {
         status.set(`${label}: ${Math.round(j.progress * 100)}%`, 'busy');
         if (j.state === 'running') return setTimeout(tick, 100);
         finish();
-        if (j.state === 'done') { status.set(`${label}: done`, 'ok'); resolve(j.result); }
-        else if (j.state === 'cancelled') { status.set(`${label}: cancelled, no results were kept`, 'err'); reject(new Error('Cancelled. Press Solve to run again.')); }
-        else { status.set(`${label}: failed`, 'err'); reject(new Error(j.error || 'The job failed.')); }
+        if (j.state === 'done') { status.setThenIdle(`${label}: done`, 'ok'); resolve(j.result); }
+        else if (j.state === 'cancelled') { status.setThenIdle(`${label}: cancelled, no results were kept`, 'err'); reject(new Error('Cancelled: no partial results were kept. Start the run again when ready.')); }
+        else { status.setThenIdle(`${label}: failed`, 'err', 15000); reject(new Error(j.error || 'The job failed.')); }
       } catch (e) {
         finish();
-        status.set('Lost contact with the backend. Restart Launch.exe.', 'err');
+        status.set(BACKEND_GONE, 'err');
         reject(e);
       }
     };
@@ -89,31 +115,42 @@ $('quit').onclick = async () => {
 const fea = { result: null };
 const feaFields = ['length_m', 'area_m2', 'k_W_mK', 'q_W_m3', 't_left_C', 't_right_C'];
 
-// Light client-side check for fast feedback; the C++ backend is the authority.
+const feaFieldLabels = {
+  length_m: 'Length L (m)', area_m2: 'Area A (m²)', k_W_mK: 'Conductivity k (W/(m·K))',
+  q_W_m3: 'Heat generation q (W/m³)', t_left_C: 'T(0) (°C)', t_right_C: 'T(L) (°C)',
+};
+
+// Light client-side check for fast feedback; the C++ backend stays the authority.
+// Returns { body } when valid, or { problems: [...] } with one actionable sentence per bad field.
 function readFeaForm() {
   const form = $('fea-form');
   const body = {};
-  let ok = true;
+  const problems = [];
   for (const name of feaFields) {
     const input = form.elements[name];
     const v = Number(input.value);
     const positive = ['length_m', 'area_m2', 'k_W_mK'].includes(name);
-    const bad = input.value.trim() === '' || !Number.isFinite(v) || (positive && v <= 0);
+    let bad = false;
+    if (input.value.trim() === '' || !Number.isFinite(v)) {
+      bad = true;
+      problems.push(`${feaFieldLabels[name]} must be a number (for example 1 or 1e-4).`);
+    } else if (positive && v <= 0) {
+      bad = true;
+      problems.push(`${feaFieldLabels[name]} must be greater than 0.`);
+    }
     input.classList.toggle('invalid', bad);
-    if (bad) ok = false;
     body[name] = v;
   }
   const meshInput = form.elements.meshes;
   const meshes = meshInput.value.split(',').map((s) => s.trim()).filter(Boolean).map(Number);
   const badMesh = meshes.length === 0 || meshes.some((n) => !Number.isInteger(n) || n < 1);
+  if (badMesh) problems.push('Meshes must be a comma-separated list of whole numbers >= 1, for example 10,20,40,80.');
   meshInput.classList.toggle('invalid', badMesh);
   body.meshes = meshes;
-  return ok && !badMesh ? body : null;
+  return problems.length ? { problems } : { body };
 }
 
-function setFeaBusy(busy) {
-  ['fea-solve'].forEach((id) => ($(id).disabled = busy));
-}
+function setFeaBusy() {}  // buttons are handled globally by pollJob (.jobbtn)
 
 function showFeaMessage(text, isError) {
   $('fea-msg').textContent = text;
@@ -130,16 +167,24 @@ function renderFea(res) {
     title: 'Temperature along the rod', xaxis: { title: 'x (m)' }, yaxis: { title: 'T (°C)' }, margin: { t: 40 },
   }, { responsive: true });
 
-  // Error at nodes is round-off; the meaningful error is the FE interpolant between nodes.
-  Plotly.newPlot('fea-err-plot', sols.map((s) => ({ x: s.x_m, y: s.abs_err_C, name: `N=${s.N}`, mode: 'lines' })), {
-    title: 'Absolute error at nodes (°C)', xaxis: { title: 'x (m)' }, yaxis: { title: '|T_FE − T_exact| at nodes (°C)', type: 'log' }, margin: { t: 40 },
+  // Error at the nodes is only round-off (see table); the meaningful error is that of the FE
+  // interpolant between nodes, so plot it at the element midpoints.
+  Plotly.newPlot('fea-err-plot', sols.map((s) => ({ x: s.x_mid_m, y: s.midpoint_err_C, name: `N=${s.N}`, mode: 'lines+markers' })), {
+    title: 'Absolute error of the FE interpolant at element midpoints',
+    xaxis: { title: 'x (m)' }, yaxis: { title: '|T_FE − T_exact| at midpoints (°C)' }, margin: { t: 40 },
   }, { responsive: true });
 
   const conv = res.convergence;
-  Plotly.newPlot('fea-conv-plot', [{
-    x: conv.map((r) => r.h_m), y: conv.map((r) => r.max_midpoint_err_C), mode: 'lines+markers', name: 'max midpoint error',
-  }], {
-    title: 'Mesh convergence', xaxis: { title: 'h (m)', type: 'log' }, yaxis: { title: 'max midpoint error (°C)', type: 'log' }, margin: { t: 40 },
+  // Dashed reference line with slope 2 (error proportional to h^2), anchored at the coarsest mesh.
+  const hs = conv.map((r) => r.h_m);
+  const ref = conv.map((r) => conv[0].max_midpoint_err_C * (r.h_m / conv[0].h_m) ** 2);
+  Plotly.newPlot('fea-conv-plot', [
+    { x: hs, y: conv.map((r) => r.max_midpoint_err_C), mode: 'lines+markers', name: 'max midpoint error' },
+    { x: hs, y: ref, mode: 'lines', name: 'slope 2 reference (∝ h²)', line: { dash: 'dash', color: 'gray' } },
+  ], {
+    title: 'Mesh convergence (log-log)',
+    xaxis: { title: 'h (m)', type: 'log', tickvals: hs, ticktext: hs.map((h) => String(h)) },
+    yaxis: { title: 'max midpoint error (°C)', type: 'log', dtick: 1, exponentformat: 'power' }, margin: { t: 40 },
   }, { responsive: true });
 
   const fmt = (v, p) => (v === null ? '–' : Number(v).toPrecision(p));
@@ -148,12 +193,12 @@ function renderFea(res) {
 
   const sel = $('fea-export-n');
   sel.innerHTML = sols.map((s) => `<option value="${s.N}">${s.N}</option>`).join('');
-  ['fea-export-conv', 'fea-export-n', 'fea-export-sol'].forEach((id) => ($(id).disabled = false));
+  ['fea-export-conv', 'fea-export-json', 'fea-export-n', 'fea-export-sol'].forEach((id) => ($(id).disabled = false));
 }
 
 $('fea-solve').onclick = async () => {
-  const body = readFeaForm();
-  if (!body) return showFeaMessage('Some inputs are invalid (highlighted). L, A, k must be > 0; meshes must be whole numbers >= 1.', true);
+  const { body, problems } = readFeaForm();
+  if (problems) return showFeaMessage(`Cannot solve yet:\n${problems.map((p) => `- ${p}`).join('\n')}`, true);
   showFeaMessage('');
   try {
     const { job_id } = await api('/api/fea/solve', { method: 'POST', body: JSON.stringify(body) });
@@ -165,6 +210,10 @@ $('fea-solve').onclick = async () => {
   }
 };
 $('fea-export-conv').onclick = () => download('fea_convergence.csv', fea.result.csv.convergence);
+$('fea-export-json').onclick = () => {
+  const { csv, ...data } = fea.result;  // CSV text is exported separately
+  download('fea_results.json', JSON.stringify(data, null, 2), 'application/json');
+};
 $('fea-export-sol').onclick = () => {
   const n = $('fea-export-n').value;
   download(`fea_N${n}.csv`, fea.result.csv[`N${n}`]);
@@ -241,7 +290,7 @@ function renderCsv(r) {
     type: 'scatter3d', mode: 'markers', x: r.x, y: r.y, z: r.z, customdata: r.node_id.map((id, n) => [id, r.T[n]]),
     marker: {
       size: 3, color: r.T, colorscale: 'Jet', cmin: r.t_min_C, cmax: r.t_max_C,
-      colorbar: { title: 'Temperature (°C)' },
+      colorbar: { title: { text: 'Temperature (°C)', side: 'right' } },
     },
     hovertemplate: 'node_id %{customdata[0]}<br>x %{x:.5g} m<br>y %{y:.5g} m<br>z %{z:.5g} m<br>T %{customdata[1]:.4g} °C<extra></extra>',
   };
@@ -316,6 +365,8 @@ async function hwAction(action, id) {
     } else if (action === 'telemetry') {
       const t = await api(`/api/devices/${id}/telemetry`);
       $('hw-telemetry').textContent = JSON.stringify(t, null, 2);
+      hw.lastTelemetry = t;
+      $('hw-export-telemetry').disabled = false;
       hwLog(`${id}: telemetry seq ${t.seq} (SIMULATED)`);
     } else if (action === 'disconnect') {
       await api(`/api/devices/${id}/disconnect`, { method: 'POST' });
@@ -342,6 +393,7 @@ $('hw-fault').onchange = async (ev) => {
     await hwRefresh();
   } catch (e) { hwMessage(e.message, true); }
 };
+$('hw-export-telemetry').onclick = () => download('hardware_telemetry.json', JSON.stringify(hw.lastTelemetry, null, 2), 'application/json');
 $('hw-export-log').onclick = () => download('hardware_event_log.json', JSON.stringify({ label: 'SIMULATED', events: hw.log }, null, 2), 'application/json');
 hwRefresh().catch(() => {});
 

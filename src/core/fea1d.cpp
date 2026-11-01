@@ -113,15 +113,22 @@ double exactTemperature(const RodParams& p, double x) {
     return p.t_left_C + (p.t_right_C - p.t_left_C) * x / L + p.q_W_m3 / (2.0 * p.k_W_mK) * x * (L - x);
 }
 
+MidpointErrors midpointErrors(const RodParams& p, const FeaSolution& s) {
+    MidpointErrors m;
+    for (size_t i = 0; i + 1 < s.x_m.size(); ++i) {
+        const double xm = 0.5 * (s.x_m[i] + s.x_m[i + 1]);
+        const double fe = 0.5 * (s.t_C[i] + s.t_C[i + 1]);  // linear shape functions evaluated at xi = 0
+        m.x_m.push_back(xm);
+        m.err_C.push_back(std::fabs(fe - exactTemperature(p, xm)));
+    }
+    return m;
+}
+
 ErrorMetrics computeErrors(const RodParams& p, const FeaSolution& s) {
     ErrorMetrics m;
     for (size_t i = 0; i < s.x_m.size(); ++i)
         m.max_nodal_C = std::max(m.max_nodal_C, std::fabs(s.t_C[i] - exactTemperature(p, s.x_m[i])));
-    for (size_t i = 0; i + 1 < s.x_m.size(); ++i) {
-        const double xm = 0.5 * (s.x_m[i] + s.x_m[i + 1]);
-        const double fe = 0.5 * (s.t_C[i] + s.t_C[i + 1]);  // linear shape functions evaluated at xi = 0
-        m.max_midpoint_C = std::max(m.max_midpoint_C, std::fabs(fe - exactTemperature(p, xm)));
-    }
+    for (double e : midpointErrors(p, s).err_C) m.max_midpoint_C = std::max(m.max_midpoint_C, e);
     return m;
 }
 

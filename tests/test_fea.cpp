@@ -29,6 +29,17 @@ TEST_CASE("midpoint error matches h^2 q / (8k) for N = 10, 20, 40, 80") {
     }
 }
 
+TEST_CASE("per-element midpoint errors are consistent with the maximum") {
+    const wb::RodParams p = withN(10);
+    const wb::FeaSolution s = wb::solveRod(p);
+    const wb::MidpointErrors m = wb::midpointErrors(p, s);
+    REQUIRE(m.x_m.size() == 10);
+    CHECK(m.x_m.front() == doctest::Approx(0.05));
+    CHECK(*std::max_element(m.err_C.begin(), m.err_C.end()) == doctest::Approx(wb::computeErrors(p, s).max_midpoint_C));
+    // The error of a linear interpolant of a parabola is the same in every element: q h^2 / (8 k).
+    for (double e : m.err_C) CHECK(e == doctest::Approx(1.25).epsilon(1e-9));
+}
+
 TEST_CASE("observed convergence order is 2") {
     const wb::FeaStudy s = wb::runStudy(wb::RodParams{}, {10, 20, 40, 80});
     CHECK(std::isnan(s.rows[0].observed_order));

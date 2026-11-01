@@ -98,7 +98,9 @@ void startHeartbeatWatchdog(httplib::Server& svr, Logger& log) {
 
 }  // namespace
 
-int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR cmdLine, int) {
+    // --no-browser: used by automated UI tests so the default browser is not opened.
+    const bool open_browser = std::string(cmdLine ? cmdLine : "").find("--no-browser") == std::string::npos;
     const fs::path exe_dir = exeDirectory();
     Logger log(exe_dir / "logs" / "workbench.log");
     log.log("starting Launch.exe");
@@ -158,7 +160,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             std::to_string(launch_to_ready_ms) + " ms");
 
     const std::wstring url = L"http://127.0.0.1:" + std::to_wstring(port) + L"/";
-    ShellExecuteW(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    if (open_browser) ShellExecuteW(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 
     startHeartbeatWatchdog(svr, log);
     server_thread.join();
