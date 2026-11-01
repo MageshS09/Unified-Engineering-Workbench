@@ -72,6 +72,14 @@ powershell -ExecutionPolicy Bypass -File scripts\package.ps1 -CandidateId <ID>  
 node scripts\md_to_pdf.mjs docs\report.md docs\report.pdf          (report PDF)
 ```
 
+## Static demo on Vercel
+
+The real workbench is a Windows program (`Launch.exe`) and cannot run on Vercel. `vercel.json` therefore deploys a **static demo** of the same page: `/api/*` calls are answered from responses **recorded from the real C++ backend** (`demo/data/*.json`, produced by `node scripts/record_demo.mjs`). Nothing is computed in JavaScript. Only the default FEA case and default benchmark were recorded; custom inputs, uploads and live device simulation show a clear "needs the live C++ backend" message. The status bar and a banner say it is a demo.
+
+- Build locally: `node scripts/build_demo.mjs` (creates `demo-dist/`), check it: `node tests/ui/demo_smoke.mjs` (22 checks).
+- Deploy: import this GitHub repository in Vercel (no framework, no install step; build command and output folder come from `vercel.json`), or run `npx vercel --prod` in the project root. Then test the live address: `node tests/ui/demo_smoke.mjs https://<your-project>.vercel.app`.
+- Re-record after changing the backend: build, then `node scripts/record_demo.mjs build\Launch.exe`, commit `demo/data`.
+
 ## Results and evidence
 
 `results/` holds the raw CSV and labelled SVG plots produced by `workbench_cli` (FEA per mesh and convergence, backprop loss and gradient check, performance, system info, parser benchmark); the numbers in `docs/report.md` come from these files. Other documents: `docs/report.pdf` (4 pages), `docs/test_report.md`, `docs/embedded_design.md`, `docs/ai_log.md` (AI-use log), `docs/ownership.md`, `docs/screenshots/` (15 screenshots and `walkthrough.md`: a timestamped UI walkthrough with the application log, produced by the browser test; it stands in for the demo video), `git_log.txt` and `repo.bundle` (version control evidence, in the ZIP).

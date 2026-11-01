@@ -101,5 +101,15 @@ Tool: Claude Code in VS Code (model: Claude Sonnet 5.5, `claude-sonnet-5-5`). On
 - **Validation:** 0 warnings; ctest 1/1; wb_tests 50 test cases, 1584 assertions pass; UI test 40/40 checks pass (twice in a row); PDF rendered with PyMuPDF (4 A4 pages) and inspected.
 - **Not possible here:** Windows Sandbox (this PC runs a Windows Home edition, where the feature is not available), so the clean-machine test remains with the candidate.
 
+## Phase 10 — Static demo for Vercel (prepared, NOT deployed)
+- **Prompt:** "this project are pushed to github after that i want to deploy this project in vercel so do that".
+- **Decision with the candidate:** the real backend is a Windows `.exe`, which Vercel cannot run, so I asked and the candidate chose a *static demo built from real C++ results* (not a landing page, not a WebAssembly rewrite).
+- **Produced:** `scripts/record_demo.mjs` (records real responses from `Launch.exe` into `demo/data/`, 12 files, about 165 KB), `demo/demo.js` (replays them; refuses anything needing the live backend), `scripts/build_demo.mjs` (copies `app/web` + data + shim into `demo-dist/` and adds a banner), `vercel.json`, `.vercelignore`, a status-text tweak in `app/web/app.js` (live app unchanged), `tests/ui/demo_smoke.mjs`. Pushed to GitHub as commit `4442195`.
+- **Validation:** demo test 22/22 locally after one fix; I viewed the Hardware screenshot (SIMULATED badges, clear "Static demo ... needs the live C++ backend" message, recorded session). The live-app UI test (40 checks) is unaffected.
+- **Incorrect/unsuitable things that ACTUALLY happened:**
+  1. My first demo test run had 1 failure: I expected node 1231's temperature to be "20" but the recorded value is 20.001 °C (my expectation, not the demo). My first `sed` fix did not change the regex (quoting), so the check still failed until I edited the line directly.
+  2. **I did not deploy.** The Vercel account connected to my tools is the team "h ragav shrinivas' projects" with GitHub namespace `ragav-shrinivas`, while the candidate's GitHub is `MageshS09`. I could not confirm that this account is the candidate's (the identity lookup returned 404, and the candidate's reply gave an email but not an ownership confirmation), so I did not publish the project under it. The candidate deploys from their own Vercel account (steps in the README). I therefore make **no claim** that a Vercel URL exists or works.
+- **Not verified:** the demo has not been tested on Vercel itself (build command run there, headers, file sizes), only as a local static copy.
+
 ## Magesh's own review notes
 _(to be filled in by the candidate)_

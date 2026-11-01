@@ -31,6 +31,10 @@ Other checks: status bar "Backend ready"; four tabs; STL sample 12 triangles / 8
 
 Bugs this test found in itself (not in the product) while being written: stale mouse coordinates after a screenshot resized the viewport, a wheel event sent before the pointer was over the 3D canvas, a hover scan that did not wait long enough for 3D picking, and a race when checking that the process had exited. They are recorded in `docs/ai_log.md`.
 
+### Static demo test (`tests/ui/demo_smoke.mjs`)
+
+22 of 22 checks pass against the locally built `demo-dist/`: status bar and banner say "static demo" with the recording details (CPU, compiler, commit); Quit hidden; report PDF served; STL sample (12 triangles) and CSV sample (1331 nodes) replayed; node lookup answered from recorded backend data (node 1231: T = 20.001 °C); uploads, custom FEA parameters, other benchmark settings and live device connects are refused with an explicit "needs the live C++ backend" message (no fabricated result); default FEA and benchmark replay the recorded numbers (midpoint errors 1.25 / 0.3125 / 0.078125 / 0.01953125, PASS agreement); backprop 4/4; recorded hardware session shows two timeouts then success; no console errors. **Not run against a deployed URL** (see `docs/ai_log.md`, Phase 10).
+
 ## 3. API checks with curl (manual, recorded in `docs/ai_log.md`)
 
 FEA solve and its error responses (negative k, non-numeric field, invalid JSON, unknown job id), backprop endpoint, performance job with cancel (state "cancelled", no result), geometry upload of valid and malformed files, node lookup, device list / fault injection / single connect timeout (HTTP 504) / retry recovery / wrong-order calls (HTTP 409) / unknown device (404).
