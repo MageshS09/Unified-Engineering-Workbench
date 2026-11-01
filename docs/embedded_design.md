@@ -1,6 +1,6 @@
 # Embedded-system integration design (Task E)
 
-**Scope.** A host-connected workbench for **one microcontroller board, one FPGA board and one JTAG debug adapter**. This is a *design* plus **SIMULATED** C++ mock adapters. No physical wiring, PCB, firmware deployment or real FPGA programming was done, and nothing in this repository talks to hardware. Part classes ("STM32 Nucleo-class", "Artix-7 board class", "FT2232H / J-Link-class") are *assumptions chosen to make the design concrete*; every number below must be re-checked against the datasheet and schematic of the actual boards before wiring anything.
+**Scope.** A host-connected workbench for **one microcontroller board, one FPGA board and one JTAG debug adapter**. This is a *design* plus **SIMULATED** C++ mock adapters. No physical wiring, PCB, firmware deployment or real FPGA programming was done, and nothing in this repository talks to hardware. Part classes ("STM32 Nucleo-class", "Artix-7 board class", "FT2232H / J-Link-class") are *assumptions chosen to make the design concrete*. **What was checked:** the FT2232H figures against FTDI's datasheet v2.6 (document FT_000061, pages 9 and 47-48), the Arm 10-pin connector against Keil/SEGGER connector documentation, and the Artix-7 bank-0 / CFGBVS behaviour against AMD documentation summaries (see Section 8). **What was not checked:** the schematic of any specific MCU or FPGA board, or the full UG470 text; every board-specific number must be re-checked against the real board before wiring anything.
 
 ## 1. Block diagram
 
@@ -48,8 +48,8 @@ ASCII fallback (same content):
 |---|---|---|---|
 | **Power in** | USB VBUS 5 V from hub, on-board LDO to 3.3 V | Own supply (typ. 5 V barrel or USB, board dependent); on-board regulators make VCCINT 1.0 V, VCCAUX 1.8 V, VCCO 3.3 V | USB bus power 5 V; internal regulator for the chip core |
 | **Powers the target?** | No | No | **No.** The adapter only *senses* VTref. It must never back-feed power into a target |
-| **I/O voltage domain** | 3.3 V LVCMOS | JTAG pins live in configuration bank 0, powered from that bank's VCCO (assumed 3.3 V) | Adapter-side buffers follow VTref (e.g. 1.8 - 3.3 V); **do not assume 5 V tolerance** |
-| **Level shifting** | None needed (3.3 V to 3.3 V). If a board used 1.8 V I/O, a VTref-powered buffer/translator (unidirectional for TCK/TMS/TDI, TDO in the opposite direction) is required | None needed at 3.3 V. Footprint/option for translator if VCCO_0 is 1.8 V | Must be present on the adapter, or added externally, whenever VTref differs from the adapter's native I/O level |
+| **I/O voltage domain** | 3.3 V LVCMOS | JTAG pins are dedicated pins in configuration bank 0, powered from VCCO_0. Bank 0 supports 3.3 V / 2.5 V when the CFGBVS pin is tied to VCCO_0 and 1.8 V / 1.5 V when it is tied to GND (assumed here: CFGBVS = VCCO_0, VCCO_0 = 3.3 V) | A bare FT2232H has 3.3 V I/O cells (VCCIO 2.97 - 3.63 V, inputs 5 V tolerant when high-impedance, absolute maximum 5.8 V). It does **not** follow VTref by itself: an adapter that tracks the target level adds buffers powered from VTref |
+| **Level shifting** | None needed (3.3 V to 3.3 V). If a board used 1.8 V I/O, a VTref-powered buffer/translator (unidirectional for TCK/TMS/TDI, TDO in the opposite direction) is required | None needed at 3.3 V. If VCCO_0 / CFGBVS were set for 1.8 V, a translator is required, and a wrong CFGBVS strap can damage the device | Provided on the adapter by buffers powered from VTref (not by the FT2232H chip itself). Never connect an adapter whose buffers do not support the target's VTref |
 | **Host link** | USB virtual COM port (CDC), e.g. 115200 8N1 for telemetry | USB-UART bridge for logging; configuration only via JTAG | USB 2.0 high speed; host talks MPSSE/vendor protocol |
 | **Debug connector** | Arm Cortex 10-pin 1.27 mm (SWD/JTAG), or on-board probe | JTAG header (2.0/2.54 mm) or on-board USB-JTAG; pin numbering is board specific | Cable to target; connector depends on the cable used |
 | **Ground** | Common reference via USB and the debug cable GND pins | Common reference via the debug cable GND pins (required even with a separate supply) | GND on every cable; GNDDetect pin on the Arm connector |
@@ -73,7 +73,7 @@ ASCII fallback (same content):
 | **VTref** | **Target** | Adapter (input only) | The adapter's output level and "target present" detection come from this pin. The adapter must not drive it |
 | **GND / GNDDetect** | Common | Common | GNDDetect lets the adapter detect that the cable is plugged in |
 
-Reference: the **Arm Cortex debug connector (10-pin)** is pin 1 VTref, 2 SWDIO/TMS, 3 GND, 4 SWCLK/TCK, 5 GND, 6 SWO/TDO, 7 key, 8 NC/TDI, 9 GNDDetect, 10 nRESET. An **FT2232H**-based adapter typically maps channel A in MPSSE mode as ADBUS0 = TCK, ADBUS1 = TDI, ADBUS2 = TDO, ADBUS3 = TMS. These are the *assumed* device-specific pin assumptions; the FPGA's JTAG pins are dedicated configuration pins (TCK, TMS, TDI, TDO) that cannot be reassigned, and their header pin numbers must be read from the actual board schematic. Do not rely on this document for pin numbers of a specific board.
+Reference: the **Arm Cortex debug connector (10-pin, 1.27 mm)** is pin 1 VTref, 2 SWDIO/TMS, 3 GND, 4 SWCLK/TCK, 5 GND, 6 SWO/TDO, 7 key (no pin), 8 NC/TDI (often unconnected when only SWD is used), 9 GNDDetect, 10 nRESET. **Variant warning:** Tag-Connect cables use a different arrangement (e.g. GND on 3 and 7, NC on 5 and 9), so do not assume every 10-pin cable matches the Arm header. An **FT2232H** adapter's channel A in MPSSE mode maps ADBUS0 = TCK/SK, ADBUS1 = TDI/DO, ADBUS2 = TDO/DI, ADBUS3 = TMS/CS (FTDI datasheet v2.6, page 9). The FPGA's JTAG pins are dedicated configuration pins (TCK, TMS, TDI, TDO) that cannot be reassigned; their header pin numbers must be read from the actual board schematic. Do not rely on this document for the pin numbers of a specific board.
 
 ### Chaining versus separate cables
 The two targets are **not** placed in one daisy chain. A chain needs identical voltage, shared TCK/TMS and TDO-to-TDI wiring, and a failure of one board breaks access to the other. Each target gets its own cable, and only **one cable is connected at a time** (manual swap, or a later analog-switch board with break-before-make).
@@ -97,7 +97,7 @@ The two targets are **not** placed in one daisy chain. A chain needs identical v
 
 1. **Paper review.** Collect the three datasheets and the two board schematics; fill in the real voltage, connector and pinout columns; reject any mismatch before touching hardware.
 2. **Power off continuity.** Build/inspect each cable with a meter: VTref, TCK, TMS, TDI, TDO, GND are on the correct pins and no signal is shorted to a supply.
-3. **Power each board alone**, from a current-limited supply where possible, and measure 3.3 V, 1.8 V and 1.0 V rails against the datasheet before connecting anything else.
+3. **Power each board alone**, from a current-limited supply where possible, and measure 3.3 V, 1.8 V and 1.0 V rails against the datasheet before connecting anything else. For the FPGA also confirm the CFGBVS strap and VCCO_0 on the schematic (3.3 V with CFGBVS tied to VCCO_0 is assumed); a mismatch between CFGBVS and the bank-0 supply can damage the device.
 4. **Connect the JTAG adapter's USB only**, no target cable. Confirm it enumerates.
 5. **Connect cable A (MCU) with the MCU powered.** Verify VTref reads about 3.3 V in the adapter tool; only then allow signals.
 6. **Read-only first:** read the IDCODE / device ID at 1 MHz TCK. Increase speed only after repeated clean reads.
@@ -108,7 +108,13 @@ The two targets are **not** placed in one daisy chain. A chain needs identical v
 ## 7. Limitations
 
 - **Everything is simulated.** No USB, serial, JTAG or vendor library is used, so no claim of real hardware behaviour is made. The mock "timeout" is injected, not caused by a real device.
-- **Board classes and pinouts are assumptions** and were not checked against real datasheets in this repository; electrical figures must be verified.
+- **Board classes and board-specific pinouts are assumptions.** Generic facts (FT2232H voltages and MPSSE pins, Arm 10-pin connector, Artix-7 bank 0 / CFGBVS) were checked against the sources in Section 8; the schematic of any real MCU or FPGA board was not, and the Artix-7 statements come from AMD documentation summaries rather than a direct reading of UG470.
 - The mock models one telemetry message per request, not streaming, and no flow control, multi-client access, or loss of USB enumeration.
 - No real FPGA programming, firmware flashing, PCB, or physical wiring was done (out of scope).
 - Retry/backoff is implemented per connect call; there is no background reconnect supervisor.
+
+## 8. Sources used to check the generic electrical facts
+
+- FTDI, *FT2232H Dual High Speed USB to Multipurpose UART/FIFO IC Datasheet*, version 2.6, document FT_000061: MPSSE pin assignment (page 9: ADBUS0 TCK/SK, ADBUS1 TDI/DO, ADBUS2 TDO/DI, ADBUS3 TMS/CS); absolute maximum ratings and DC characteristics (pages 47-48: VCCIO operating supply 2.97 / 3.30 / 3.63 V, "the I/O pins are +3.3 V cells, which are +5 V tolerant", high-impedance input maximum +5.8 V, VCCIO maximum +4.0 V). The 30 MHz figure used for the mock adapter's maximum TCK is the commonly quoted MPSSE limit (60 MHz base clock divided by 2) and was **not** read from this datasheet; check FTDI application note AN_135.
+- Keil/SEGGER documentation of the Cortex-M 10-pin connector (pin order, key at position 7) and the Tag-Connect TC2050 variant, found through web search (https://www.keil.com/support/man/docs/jlink/jlink_connectors.asp).
+- AMD documentation summaries on the CFGBVS pin and configuration bank 0 voltage (Vivado properties guide UG912 and I/O planning guide UG899), found through web search. The 7 Series Configuration User Guide (UG470) itself was not retrieved.

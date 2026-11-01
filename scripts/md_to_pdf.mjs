@@ -82,7 +82,7 @@ h1 { font-size: 16pt; margin: 0 0 4px; color: #1f3a5f; }
 h2 { font-size: 11.5pt; margin: 10px 0 3px; color: #1f3a5f; border-bottom: 1px solid #b8c2cc; padding-bottom: 1px; }
 h3 { font-size: 10pt; margin: 7px 0 2px; }
 p { margin: 3px 0; } ul, ol { margin: 3px 0 3px 18px; padding: 0; } li { margin: 1px 0; }
-table { border-collapse: collapse; margin: 4px 0; font-size: 9pt; width: 100%; }
+table { border-collapse: collapse; margin: 4px 0; font-size: 9pt; width: 100%; break-inside: avoid; }
 th, td { border: 1px solid #9aa7b4; padding: 2px 5px; text-align: left; vertical-align: top; } th { background: #e6ecf2; }
 code { font: 8.4pt Consolas, monospace; background: #eef1f4; padding: 0 2px; }
 pre { font: 7.8pt/1.25 Consolas, monospace; background: #f3f5f7; border: 1px solid #d0d7de; padding: 4px 6px; margin: 4px 0; white-space: pre-wrap; }

@@ -152,6 +152,7 @@ public:
                     {{"role", "debug interface (IEEE 1149.1 TAP master), NOT a compute board"},
                      {"compute", false}, {"runs_user_application", false},
                      {"io_voltage", "follows target VTref (adapter never supplies the target)"},
+                     {"level_translation", "buffers powered from VTref (a bare FT2232H has 3.3 V I/O cells and does not track VTref itself)"},
                      {"signals", {{"TCK", "adapter output"}, {"TMS", "adapter output"}, {"TDI", "adapter output"},
                                   {"TDO", "target output"}, {"TRST_n", "adapter output, optional"},
                                   {"VTref", "target output, adapter input"}}},

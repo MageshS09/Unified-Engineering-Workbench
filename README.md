@@ -59,7 +59,7 @@ set WB_TOOLCHAIN_BIN=<your MSYS2 install>\ucrt64\bin        (or put that folder 
 set PATH=%WB_TOOLCHAIN_BIN%;%PATH%
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build --output-on-failure                   (50 test cases, 1583 assertions)
+ctest --test-dir build --output-on-failure                   (50 test cases, 1584 assertions)
 build\workbench_cli.exe                                      (regenerates results/ and data/synthetic_temperature.csv)
 build\Launch.exe                                             (finds app/web and data/ one folder up)
 ```
@@ -67,20 +67,20 @@ build\Launch.exe                                             (finds app/web and 
 Release flags are `-O2` (shown in the Performance view and `results/sysinfo.txt`); executables are linked statically. Dependency versions: `third_party/VERSIONS.md`. Optional extras:
 
 ```
-node tests/ui/ui_smoke.mjs build\Launch.exe docs\screenshots      (32 checks in headless Edge/Chrome)
+node tests/ui/ui_smoke.mjs build\Launch.exe docs\screenshots      (40 checks in headless Edge/Chrome; writes docs\screenshots and a timestamped walkthrough)
 powershell -ExecutionPolicy Bypass -File scripts\package.ps1 -CandidateId <ID>    (builds, tests, creates dist\<ID>_Workbench.zip)
 node scripts\md_to_pdf.mjs docs\report.md docs\report.pdf          (report PDF)
 ```
 
 ## Results and evidence
 
-`results/` holds the raw CSV and labelled SVG plots produced by `workbench_cli` (FEA per mesh and convergence, backprop loss and gradient check, performance, system info, parser benchmark); the numbers in `docs/report.md` come from these files. Other documents: `docs/report.pdf` (4 pages), `docs/test_report.md`, `docs/embedded_design.md`, `docs/ai_log.md` (AI-use log), `docs/ownership.md`, `docs/screenshots/` (UI walkthrough produced by the browser test), `git_log.txt` and `repo.bundle` (version control evidence, in the ZIP).
+`results/` holds the raw CSV and labelled SVG plots produced by `workbench_cli` (FEA per mesh and convergence, backprop loss and gradient check, performance, system info, parser benchmark); the numbers in `docs/report.md` come from these files. Other documents: `docs/report.pdf` (4 pages), `docs/test_report.md`, `docs/embedded_design.md`, `docs/ai_log.md` (AI-use log), `docs/ownership.md`, `docs/screenshots/` (15 screenshots and `walkthrough.md`: a timestamped UI walkthrough with the application log, produced by the browser test; it stands in for the demo video), `git_log.txt` and `repo.bundle` (version control evidence, in the ZIP).
 
 ## Known limitations
 
 - Windows only (uses Win32 APIs); tested with MSYS2 UCRT64 g++ only; not tested on a clean machine or in Windows Sandbox; the executable is unsigned.
-- Only Microsoft Edge (headless) was used to test the page; mouse rotate / pan / zoom were not simulated; very large meshes may render slowly in the browser.
+- Only Microsoft Edge (headless) was used to test the page. Mouse rotate, zoom, pan and hover were tested with real simulated input; a real mouse *click* on a 3D point could not be simulated (the handler is tested with an emitted event). Very large meshes may render slowly in the browser.
 - The CSV importer was tried only on synthetic data. The rod model is 1D with constant properties.
-- Speedup numbers come from one laptop and short (4-13 ms) batches; they vary from run to run (`results/perf_repeat.csv`).
-- Hardware is **simulated**; `docs/embedded_design.md` is a design that has not been checked against real datasheets or boards.
+- Speedup numbers come from one laptop and short batches; they vary from run to run (`results/perf_repeat.csv`, and `results/perf_repeat_long.csv` for a 10x longer workload).
+- Hardware is **simulated**; `docs/embedded_design.md` is a design. Its generic electrical facts (FT2232H, Arm 10-pin connector, Artix-7 bank 0) were checked against published sources, but no real MCU/FPGA board schematic was.
 - The handwritten backpropagation appendix (scans) is added by the candidate and is not part of this repository's generated content.

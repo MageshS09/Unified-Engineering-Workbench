@@ -108,6 +108,24 @@ void writeGeometryResults(const fs::path& out, const fs::path& dataDir) {
     wb::writeFileAtomic((out / "parse_benchmark.csv").string(), csv);
 }
 
+// Independent repeats of the whole benchmark show the run-to-run variability instead of hiding it
+// behind a single lucky or unlucky measurement. `first` (if given) is reused as run 1.
+void writePerfRepeats(const fs::path& file, const wb::PerfConfig& cfg, const wb::PerfReport* first) {
+    std::string csv = "run,cases,workers,median_s,speedup_T1_over_Tp,efficiency\n";
+    char line[200];
+    for (int run = 1; run <= 3; ++run) {
+        const wb::PerfReport r = (run == 1 && first) ? *first : wb::runBenchmark(cfg);
+        for (const auto& row : r.rows) {
+            if (row.mode != "parallel") continue;
+            std::snprintf(line, sizeof line, "%d,%d,%d,%.6f,%.3f,%.3f\n", run, cfg.batch.cases, row.workers, row.median_s,
+                          row.speedup, row.efficiency);
+            csv += line;
+        }
+    }
+    wb::writeFileAtomic(file.string(), csv);
+    std::cout << "Perf: wrote " << file.filename().string() << " (3 independent runs, " << cfg.batch.cases << " cases)" << std::endl;
+}
+
 void writePerfResults(const fs::path& out) {
     const wb::PerfReport rep = wb::runBenchmark(wb::PerfConfig{});
     wb::writeFileAtomic((out / "perf.csv").string(), wb::perfCsv(rep));
@@ -118,20 +136,12 @@ void writePerfResults(const fs::path& out) {
         std::cout << "  " << r.mode << " p=" << r.workers << " median=" << r.median_s << " s speedup=" << r.speedup
                   << " eff=" << r.efficiency << std::endl;
 
-    // Independent repeats of the whole benchmark (run 1 is the one in perf.csv) show the run-to-run
-    // variability instead of hiding it behind a single lucky or unlucky measurement.
-    std::string repeat = "run,workers,median_s,speedup_T1_over_Tp,efficiency\n";
-    char line[160];
-    for (int run = 1; run <= 3; ++run) {
-        const wb::PerfReport r = run == 1 ? rep : wb::runBenchmark(wb::PerfConfig{});
-        for (const auto& row : r.rows) {
-            if (row.mode != "parallel") continue;
-            std::snprintf(line, sizeof line, "%d,%d,%.6f,%.3f,%.3f\n", run, row.workers, row.median_s, row.speedup, row.efficiency);
-            repeat += line;
-        }
-    }
-    wb::writeFileAtomic((out / "perf_repeat.csv").string(), repeat);
-    std::cout << "Perf: wrote perf_repeat.csv (3 independent runs)" << std::endl;
+    writePerfRepeats(out / "perf_repeat.csv", wb::PerfConfig{}, &rep);
+
+    // A 10x longer batch (4000 cases): is the speedup steadier when each run lasts ~100 ms instead of ~10 ms?
+    wb::PerfConfig longer;
+    longer.batch.cases = 4000;
+    writePerfRepeats(out / "perf_repeat_long.csv", longer, nullptr);
 }
 
 }  // namespace

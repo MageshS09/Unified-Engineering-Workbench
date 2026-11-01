@@ -7,7 +7,7 @@ All results below were produced on the development machine (Windows 11, Intel Co
 ```
 100% tests passed, 0 tests failed out of 1            (ctest target: wb_tests)
 [doctest] test cases:   50 |   50 passed | 0 failed | 0 skipped
-[doctest] assertions: 1583 | 1583 passed | 0 failed
+[doctest] assertions: 1584 | 1584 passed | 0 failed
 ```
 
 | Area (file) | Test cases | What is checked |
@@ -21,9 +21,15 @@ All results below were produced on the development machine (Windows 11, Intel Co
 
 Full list of the 50 test-case names: run `build\wb_tests.exe -ltc`.
 
-## 2. UI smoke test (`tests/ui/ui_smoke.mjs`, headless Edge via DevTools)
+## 2. UI test (`tests/ui/ui_smoke.mjs`, headless Edge via DevTools)
 
-32 of 32 checks passed against the build tree and (earlier packaging) against the extracted ZIP in a path containing a space. Screenshots: `docs/screenshots/`. Checks: status bar "Backend ready"; four tabs; STL sample 12 triangles / 8 vertices with a mesh3d trace; Fit to view enabled; CSV sample 1331 nodes; scatter3d point cloud with colourbar "Temperature (°C)"; hover template with node_id, x, y, z, T; node inspection; binary STL rejected with advice; duplicate-id CSV rejected with its line number; invalid k explained before any request; FEA table with midpoint errors 1.25 / 0.3125 / 0.078125 / 0.01953125; observed order 2.000; three FEA plots; temperature plot with four FE curves plus exact; export buttons enabled; backprop four gradients pass; dJ/dw = -1.2094645; performance table with serial and parallel rows; agreement PASS; speedup plot; run buttons disabled while a job runs; Cancel visible; cancelled run keeps no results; buttons re-enabled; three SIMULATED devices; timeout then recovery by retry; telemetry labelled SIMULATED; JTAG capabilities `compute: false`; no JavaScript console errors; Quit stops Launch.exe.
+**40 of 40 checks passed** (run against the build tree, and against the extracted ZIP in a path containing a space). The test starts `Launch.exe --no-browser` and a headless browser, drives the real page, and writes 15 screenshots plus a timestamped walkthrough with the application log: `docs/screenshots/walkthrough.md`.
+
+Real mouse events (DevTools input API): drag rotates the STL model (camera changed), wheel zooms, right-drag pans, "Fit to view" restores the default camera, hovering a point-cloud node shows the label with node_id, x, y, z and T (e.g. node 1231 at 0.9, 0.1, 1.0 m, 20.00 °C). **Exception:** Plotly's 3D click detection is polled per animation frame and did not fire from synthetic input in any variant I tried (immediate, delayed, jiggled), so the node-click handler is tested by emitting the same `plotly_click` event; a real mouse click was therefore not verified.
+
+Other checks: status bar "Backend ready"; four tabs; STL sample 12 triangles / 8 vertices with a mesh3d trace; CSV sample 1331 nodes; scatter3d with colourbar "Temperature (°C)"; hover template fields; node lookup; binary STL and duplicate-id CSV rejected through the real file inputs; invalid k explained before any request; FEA midpoint errors 1.25 / 0.3125 / 0.078125 / 0.01953125 with observed order 2.000; three FEA plots; export buttons; backprop four gradients pass and dJ/dw = -1.2094645; performance table, PASS agreement and speedup plot; run buttons disabled while a job runs; Cancel visible; cancelled run keeps no results; buttons re-enabled; three SIMULATED devices; timeout then recovery by retry with backoff; telemetry labelled SIMULATED; JTAG capabilities `compute: false` with the level-translation note; no JavaScript console errors; Quit stops Launch.exe.
+
+Bugs this test found in itself (not in the product) while being written: stale mouse coordinates after a screenshot resized the viewport, a wheel event sent before the pointer was over the 3D canvas, a hover scan that did not wait long enough for 3D picking, and a race when checking that the process had exited. They are recorded in `docs/ai_log.md`.
 
 ## 3. API checks with curl (manual, recorded in `docs/ai_log.md`)
 
@@ -40,7 +46,7 @@ Limit enforced in C++: **200 MB** (209,715,200 bytes). Measured on this machine:
 | CSV, 9.4 M nodes (API, upload + parse + JSON) | 184.4 MiB | HTTP 200 in 3.08 s; 200,000 of 9,400,000 nodes returned for display (stride 47) |
 | ASCII STL, 1.8 M triangles (API) | 186.8 MiB | HTTP 200 in 7.74 s; 3,601,800 unique vertices; response 95.5 MiB |
 | Server process during both uploads | n/a | peak working set about 1009 MiB |
-| Parse only, `results/parse_benchmark.csv` | | 200 k triangles (20.2 MB) 0.295 s; 1 M nodes (39.4 MB) 0.235 s; 3 M nodes (120.6 MB) 0.741 s |
+| Parse only, `results/parse_benchmark.csv` | | 200 k triangles (20.2 MB) 0.282 s; 1 M nodes (39.4 MB) 0.230 s; 3 M nodes (120.6 MB) 0.709 s |
 
 Not tested: rendering a multi-hundred-thousand-triangle STL in the browser (the 95 MiB response was not drawn), files larger than 256 MB (the HTTP layer answers 413 before the 200 MB message; the page checks the size first), machines with less than 8 GiB of RAM.
 

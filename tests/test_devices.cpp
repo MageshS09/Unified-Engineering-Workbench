@@ -37,6 +37,8 @@ TEST_CASE("capabilities do not pretend the JTAG adapter is a compute board") {
     const auto jtag = m.capabilitiesOf("jtag0");
     CHECK(jtag["compute"] == false);
     CHECK(jtag["runs_user_application"] == false);
+    // A bare FT2232H has 3.3 V I/O cells, so VTref tracking must come from separate buffers.
+    CHECK(jtag["level_translation"].get<std::string>().find("VTref") != std::string::npos);
     CHECK(jtag["signals"]["VTref"].get<std::string>().find("target") != std::string::npos);
     CHECK(m.capabilitiesOf("mcu0")["io_voltage_V"] == doctest::Approx(3.3));
     CHECK(m.capabilitiesOf("fpga0")["io_voltage_V"] == doctest::Approx(3.3));
