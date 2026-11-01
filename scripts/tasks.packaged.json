@@ -1,0 +1,46 @@
+{
+  // Copied to .vscode/tasks.json inside the ZIP, where Launch.exe sits at the root of the extracted folder.
+  // Open the extracted folder in VS Code (or Antigravity), then press Ctrl+Shift+B or use Terminal > Run Task.
+  // No extension is needed. Launch.exe itself needs neither the editor nor the internet.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run Workbench (packaged)",
+      "type": "process",
+      "command": "${workspaceFolder}/Launch.exe",
+      "args": [],
+      "problemMatcher": [],
+      "presentation": { "reveal": "never", "panel": "dedicated" },
+      "group": { "kind": "build", "isDefault": true },
+      "detail": "Starts the packaged Launch.exe from this folder."
+    },
+    {
+      "label": "Configure (CMake Release)",
+      "type": "process",
+      "command": "cmake",
+      "args": ["-S", ".", "-B", "build", "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Release"],
+      "options": { "env": { "PATH": "${env:WB_TOOLCHAIN_BIN};${env:PATH}" } },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build (CMake Release)",
+      "type": "process",
+      "command": "cmake",
+      "args": ["--build", "build"],
+      "dependsOn": ["Configure (CMake Release)"],
+      "options": { "env": { "PATH": "${env:WB_TOOLCHAIN_BIN};${env:PATH}" } },
+      "problemMatcher": ["$gcc"],
+      "group": "build"
+    },
+    {
+      "label": "Run tests",
+      "type": "process",
+      "command": "ctest",
+      "args": ["--test-dir", "build", "--output-on-failure"],
+      "dependsOn": ["Build (CMake Release)"],
+      "options": { "env": { "PATH": "${env:WB_TOOLCHAIN_BIN};${env:PATH}" } },
+      "problemMatcher": [],
+      "group": { "kind": "test", "isDefault": true }
+    }
+  ]
+}

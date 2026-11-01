@@ -98,6 +98,19 @@ void startHeartbeatWatchdog(httplib::Server& svr, Logger& log) {
 
 }  // namespace
 
+// ShellExecuteW reports success with a value > 32. If no browser could be started, record it and
+// show the address, so the user can still open the (already running) workbench by hand.
+static void openBrowser(const std::wstring& url, Logger& log) {
+    const INT_PTR code = reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL));
+    if (code > 32) {
+        log.log("opened the default browser");
+        return;
+    }
+    log.log("ERROR: could not open the default browser (ShellExecute code " + std::to_string(code) + ")");
+    const std::wstring msg = L"The workbench is running, but no browser could be opened automatically.\nOpen this address in a web browser:\n" + url;
+    MessageBoxW(nullptr, msg.c_str(), L"Unified Engineering Workbench", MB_ICONINFORMATION);
+}
+
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR cmdLine, int) {
     // --no-browser: used by automated UI tests so the default browser is not opened.
     const bool open_browser = std::string(cmdLine ? cmdLine : "").find("--no-browser") == std::string::npos;
@@ -160,7 +173,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR cmdLine, int) {
             std::to_string(launch_to_ready_ms) + " ms");
 
     const std::wstring url = L"http://127.0.0.1:" + std::to_wstring(port) + L"/";
-    if (open_browser) ShellExecuteW(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    if (open_browser) openBrowser(url, log);
 
     startHeartbeatWatchdog(svr, log);
     server_thread.join();

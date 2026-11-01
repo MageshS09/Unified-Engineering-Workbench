@@ -1,6 +1,6 @@
 # CLAUDE.md — Project instructions (saved from the user's build plan)
 
-IMPORTANT TOOLCHAIN NOTE: Use only the MSYS2 UCRT64 toolchain at C:\msys64\ucrt64\bin (g++, cmake, ninja, objdump) — call them by full path or put that folder first in PATH for every build command, because another MinGW (WinLibs) is also installed on this PC. Use the CMake "Ninja" generator.
+IMPORTANT TOOLCHAIN NOTE: Use only the MSYS2 UCRT64 toolchain (the `ucrt64\bin` folder under the MSYS2 install root; g++, cmake, ninja, objdump) — put that folder first in PATH (or set WB_TOOLCHAIN_BIN to it) for every build command, because another MinGW (WinLibs) is also installed on this PC. Use the CMake "Ninja" generator. (The install root is deliberately not written here: no machine paths in the repo.)
 
 Project: PASS Science Works R&D internship assignment "Unified Engineering Workbench" (candidate: Magesh). The brief is the source of truth (assignment.pdf; if the file is absent, the brief was supplied in chat — see docs/ for the rubric summary). Work through the phases IN ORDER. After every phase: build, run all tests, fix every error and warning, show a short summary, append an entry to docs/ai_log.md, and make a git commit with a meaningful message. Never move to the next phase while the build or tests are failing.
 
@@ -102,6 +102,6 @@ Keep functions small, names clear, consistent style, short comments explaining w
 - Launch.exe has only system DLL dependencies; opens from dist/ by double-click
 - FEA midpoint errors match the expected table; backprop values and grad check pass
 - serial/parallel max difference <= 1e-8
-- No absolute paths (search for "C:\\", "/Users", "/home"), no secrets
+- No absolute paths (search for drive-letter paths, user-profile and home-directory paths), no secrets
 - Meaningful git log; create repo.bundle with: git bundle create repo.bundle --all
 - List what Magesh still must do by hand
