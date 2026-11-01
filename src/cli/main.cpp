@@ -117,6 +117,21 @@ void writePerfResults(const fs::path& out) {
     for (const auto& r : rep.rows)
         std::cout << "  " << r.mode << " p=" << r.workers << " median=" << r.median_s << " s speedup=" << r.speedup
                   << " eff=" << r.efficiency << std::endl;
+
+    // Independent repeats of the whole benchmark (run 1 is the one in perf.csv) show the run-to-run
+    // variability instead of hiding it behind a single lucky or unlucky measurement.
+    std::string repeat = "run,workers,median_s,speedup_T1_over_Tp,efficiency\n";
+    char line[160];
+    for (int run = 1; run <= 3; ++run) {
+        const wb::PerfReport r = run == 1 ? rep : wb::runBenchmark(wb::PerfConfig{});
+        for (const auto& row : r.rows) {
+            if (row.mode != "parallel") continue;
+            std::snprintf(line, sizeof line, "%d,%d,%.6f,%.3f,%.3f\n", run, row.workers, row.median_s, row.speedup, row.efficiency);
+            repeat += line;
+        }
+    }
+    wb::writeFileAtomic((out / "perf_repeat.csv").string(), repeat);
+    std::cout << "Perf: wrote perf_repeat.csv (3 independent runs)" << std::endl;
 }
 
 }  // namespace
